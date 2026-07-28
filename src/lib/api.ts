@@ -20,6 +20,7 @@ export const api = {
   agenda: () => req<AgendaItem[]>("/agenda"),
   org: () => req<OrgNode>("/org"),
   ferias: () => req<Ausencia[]>("/ferias"),
+  departamentos: () => req<string[]>("/departamentos"),
 
   comunicados: {
     list: () => req<Comunicado[]>("/comunicados"),

@@ -35,7 +35,7 @@ interface FormState {
   autor: string;
   fixado: boolean;
   publico: PublicoAlvo;
-  departamentosStr: string;
+  departamentos: string[];
   obrigatorio: boolean;
 }
 
@@ -48,7 +48,7 @@ const FORM_INICIAL: FormState = {
   autor: "Comunicação Interna",
   fixado: false,
   publico: "todos",
-  departamentosStr: "",
+  departamentos: [],
   obrigatorio: false,
 };
 
@@ -67,6 +67,9 @@ function visivelPara(c: Comunicado, tipoContrato?: PublicoAlvo, area?: string): 
 export default function ComunicadosPage() {
   const { me, isAdmin } = usePortal();
   const { data, loading, reload } = useAsync(() => api.comunicados.list());
+  // Departamentos existentes (Entra) para o seletor de segmentação — só admin cadastra.
+  const { data: deptData } = useAsync(() => (isAdmin ? api.departamentos() : Promise.resolve([])), [isAdmin]);
+  const deptOptions = deptData ?? [];
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -100,7 +103,7 @@ export default function ComunicadosPage() {
       autor: c.autor,
       fixado: c.fixado ?? false,
       publico: c.publico ?? "todos",
-      departamentosStr: (c.departamentos ?? []).join(", "),
+      departamentos: c.departamentos ?? [],
       obrigatorio: c.obrigatorio ?? false,
     });
     setOpen(true);
@@ -118,10 +121,7 @@ export default function ComunicadosPage() {
       autor: form.autor,
       fixado: form.fixado,
       publico: form.publico,
-      departamentos: form.departamentosStr
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
+      departamentos: form.departamentos,
       obrigatorio: form.obrigatorio,
     };
     try {
@@ -351,13 +351,49 @@ export default function ComunicadosPage() {
             </NativeSelect>
           </Field>
 
-          <Field label="Departamentos" htmlFor="departamentos" hint="Separe por vírgula. Vazio = todos.">
-            <Input
-              id="departamentos"
-              value={form.departamentosStr}
-              onChange={(e) => setForm((f) => ({ ...f, departamentosStr: e.target.value }))}
-              placeholder="Ex.: Projetos, AMS, Comercial"
-            />
+          <Field label="Departamentos" htmlFor="departamentos" hint="Selecione um ou mais. Vazio = todos.">
+            {deptOptions.length > 0 ? (
+              <div className="flex max-h-36 flex-wrap gap-1.5 overflow-auto rounded-lg border border-border bg-background p-2">
+                {deptOptions.map((d) => {
+                  const sel = form.departamentos.includes(d);
+                  return (
+                    <button
+                      type="button"
+                      key={d}
+                      aria-pressed={sel}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          departamentos: sel
+                            ? f.departamentos.filter((x) => x !== d)
+                            : [...f.departamentos, d],
+                        }))
+                      }
+                      className={
+                        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors " +
+                        (sel
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-secondary text-secondary-foreground hover:border-primary/40")
+                      }
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <Input
+                id="departamentos"
+                value={form.departamentos.join(", ")}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    departamentos: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                  }))
+                }
+                placeholder="Ex.: Projetos, AMS, Comercial"
+              />
+            )}
           </Field>
         </div>
 

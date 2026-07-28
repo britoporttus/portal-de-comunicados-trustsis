@@ -3,12 +3,12 @@
 import type { Pessoa, AgendaItem, Ausencia, OrgNode } from "./types.js";
 
 export const mockPeople: Pessoa[] = [
-  { id: "u_joao", nome: "João Ribeiro", cargo: "Analista de Sistemas", area: "Tecnologia", email: "joao.ribeiro@trustsis.com.br", telefone: "+55 11 99999-0001" },
-  { id: "u_ana", nome: "Ana Beatriz Costa", cargo: "Gerente de Tecnologia", area: "Tecnologia", email: "ana.costa@trustsis.com.br" },
-  { id: "u_pedro", nome: "Pedro Henrique Dias", cargo: "Desenvolvedor Pleno", area: "Tecnologia", email: "pedro.dias@trustsis.com.br" },
-  { id: "u_larissa", nome: "Larissa Menezes", cargo: "Designer de Produto", area: "Tecnologia", email: "larissa.menezes@trustsis.com.br" },
+  { id: "u_joao", nome: "João Ribeiro", cargo: "Analista de Sistemas", area: "Tecnologia", email: "joao.ribeiro@trustsis.com.br", telefone: "+55 11 99999-0001", managerId: "u_ana" },
+  { id: "u_ana", nome: "Ana Beatriz Costa", cargo: "Gerente de Tecnologia", area: "Tecnologia", email: "ana.costa@trustsis.com.br", managerId: "u_marcos" },
+  { id: "u_pedro", nome: "Pedro Henrique Dias", cargo: "Desenvolvedor Pleno", area: "Tecnologia", email: "pedro.dias@trustsis.com.br", managerId: "u_ana" },
+  { id: "u_larissa", nome: "Larissa Menezes", cargo: "Designer de Produto", area: "Tecnologia", email: "larissa.menezes@trustsis.com.br", managerId: "u_ana" },
   { id: "u_marcos", nome: "Marcos Antônio", cargo: "Diretor de Operações", area: "Diretoria", email: "marcos.antonio@trustsis.com.br" },
-  { id: "u_bruna", nome: "Bruna Carvalho", cargo: "Analista de RH", area: "Recursos Humanos", email: "bruna.carvalho@trustsis.com.br" },
+  { id: "u_bruna", nome: "Bruna Carvalho", cargo: "Analista de RH", area: "Recursos Humanos", email: "bruna.carvalho@trustsis.com.br", managerId: "u_marcos" },
 ];
 
 const iso = (offsetDays: number, h: number, m = 0) => {

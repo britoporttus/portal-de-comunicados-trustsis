@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, isGraphOn } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, isGraphOn } from "./graph.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
 } from "./types.js";
@@ -38,6 +38,15 @@ app.get("/api/org", async (req, res) => {
 
 app.get("/api/ferias", async (_req, res) => {
   res.json(await getVacations());
+});
+
+// Departamentos existentes (para seletores) — leve, sem baixar fotos.
+app.get("/api/departamentos", async (_req, res) => {
+  try {
+    res.json(await getDepartments());
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 // ---------- CRUD genérico do store ----------

@@ -79,6 +79,8 @@ export interface Pessoa {
   fotoUrl?: string;
   /** Tipo de contrato derivado do employeeType do Entra ("clt" | "pj"). */
   tipoContrato?: PublicoAlvo;
+  /** id do gestor (campo manager do Entra) — usado para montar a árvore do organograma. */
+  managerId?: string;
 }
 
 export interface AgendaItem {

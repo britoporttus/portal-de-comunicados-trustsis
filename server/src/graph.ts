@@ -51,10 +51,11 @@ async function graphGet<T = any>(path: string): Promise<T> {
 
 /** Lista TODOS os usuários do diretório (paginando @odata.nextLink), já filtrando
  *  contas sem nome/e-mail (salas, serviços). `extraSelect` adiciona campos ao $select. */
-async function listAllUsers(extraSelect = ""): Promise<any[]> {
+async function listAllUsers(extraSelect = "", expand = ""): Promise<any[]> {
   const sel = extraSelect ? `${SELECT},${extraSelect}` : SELECT;
+  const exp = expand ? `&$expand=${expand}` : "";
   const out: any[] = [];
-  let next: string | null = `${GRAPH}/users?$select=${sel}&$top=100`;
+  let next: string | null = `${GRAPH}/users?$select=${sel}${exp}&$top=100`;
   let guard = 0;
   while (next && guard < 25) {
     const res: { value: any[]; "@odata.nextLink"?: string } = await graphGetUrl(next);
@@ -83,6 +84,40 @@ function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
   return undefined;
 }
 
+/** Mantém apenas o CEO (Claudio) e quem reporta a ele — direta ou indiretamente.
+ *  Reduz o diretório às pessoas conectadas à cadeia de gestão do CEO (remove contas
+ *  soltas/sem vínculo). Seguro contra ciclos (usa conjunto de visitados). */
+function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
+  const byId = new Map(pessoas.map((p) => [p.id, p]));
+  const ceo =
+    pessoas.find((p) => /\bceo\b/i.test(p.area ?? "")) ??
+    pessoas.find((p) => /\bceo\b/i.test(p.cargo ?? "")) ??
+    pessoas.find((p) => /cl[aá]udio/i.test(p.nome));
+  if (!ceo) {
+    console.warn("[graph] CEO (Claudio) não encontrado — mantendo diretório completo");
+    return pessoas;
+  }
+  const filhosDe = new Map<string, Pessoa[]>();
+  for (const p of pessoas) {
+    const mgr = p.managerId && byId.has(p.managerId) && p.managerId !== p.id ? p.managerId : null;
+    if (!mgr) continue;
+    if (!filhosDe.has(mgr)) filhosDe.set(mgr, []);
+    filhosDe.get(mgr)!.push(p);
+  }
+  const keep = new Set<string>([ceo.id]);
+  const fila = [ceo.id];
+  while (fila.length) {
+    const atual = fila.shift()!;
+    for (const f of filhosDe.get(atual) ?? []) {
+      if (!keep.has(f.id)) {
+        keep.add(f.id);
+        fila.push(f.id);
+      }
+    }
+  }
+  return pessoas.filter((p) => keep.has(p.id));
+}
+
 function mapPessoa(u: any): Pessoa {
   return {
     id: u.id,
@@ -92,6 +127,7 @@ function mapPessoa(u: any): Pessoa {
     email: u.mail ?? u.userPrincipalName ?? undefined,
     telefone: u.mobilePhone ?? (u.businessPhones?.[0] as string) ?? undefined,
     tipoContrato: tipoContratoDe(u.employeeType),
+    managerId: u.manager?.id ?? undefined,
   };
 }
 
@@ -202,13 +238,23 @@ export async function getOrg(upn?: string): Promise<OrgNode> {
 
     let diretorio: Pessoa[] = [];
     try {
-      const brutos = (await listAllUsers()).filter((u) => {
+      // Expande o gestor (manager) de cada usuário para montar a árvore hierárquica.
+      // Se o tenant não permitir $expand=manager, cai para a listagem simples (árvore plana).
+      let todos: any[];
+      try {
+        todos = await listAllUsers("", "manager($select=id)");
+      } catch {
+        todos = await listAllUsers();
+      }
+      const brutos = todos.filter((u) => {
         // Somente usuários ATIVOS no Entra e com e-mail do domínio @trustsis.com.
         if (u.accountEnabled === false) return false;
         const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
         return mail.endsWith("@trustsis.com");
       });
-      diretorio = brutos.map(mapPessoa);
+      // Só o CEO (Claudio) e seus liderados diretos/indiretos (filtra antes das fotos
+      // para não baixar fotos de quem será removido).
+      diretorio = limitarAoCeo(brutos.map(mapPessoa));
       await attachPhotos(diretorio);
       diretorio.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     } catch (e) {
@@ -250,6 +296,31 @@ export async function getBirthdays(): Promise<Aniversariante[]> {
     return list.sort((a, b) => a.mes - b.mes || a.dia - b.dia);
   } catch (e) {
     console.warn("[graph] getBirthdays falhou:", (e as Error).message);
+    return [];
+  }
+}
+
+/** Lista os departamentos existentes (campo department) dos usuários ATIVOS @trustsis.com.
+ *  Leve: NÃO baixa fotos. Usado nos seletores de departamento (comunicados). */
+export async function getDepartments(): Promise<string[]> {
+  if (!graphEnabled) {
+    const set = new Set(mockPeople.map((p) => p.area).filter(Boolean) as string[]);
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
+  try {
+    const users = (await listAllUsers()).filter((u) => {
+      if (u.accountEnabled === false) return false;
+      const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
+      return mail.endsWith("@trustsis.com");
+    });
+    const set = new Set<string>();
+    for (const u of users) {
+      const d = String(u.department ?? "").trim();
+      if (d) set.add(d);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  } catch (e) {
+    console.warn("[graph] getDepartments falhou:", (e as Error).message);
     return [];
   }
 }

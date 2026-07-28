@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Menu, Moon, Sun, Search, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { usePortal } from "@/context/PortalProvider";
 import { iniciais, saudacao } from "@/lib/format";
 import { NAV } from "./nav";
 import { Brand } from "./shared";
+import { NextMeetingCard } from "./NextMeetingCard";
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -147,15 +148,19 @@ export default function AppLayout() {
 
 function PageGreeting() {
   const { me } = usePortal();
+  const isHome = useLocation().pathname === "/";
   const primeiro = me?.nome?.split(" ")[0] ?? "colaborador";
   return (
-    <div className="mb-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground lg:text-[28px]">
-        {saudacao()}, {primeiro} 👋
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Tudo o que você precisa da TrustSis, em um só lugar.
-      </p>
+    <div className="mb-6 flex items-center justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground lg:text-[28px]">
+          {saudacao()}, {primeiro} 👋
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tudo o que você precisa da TrustSis, em um só lugar.
+        </p>
+      </div>
+      {isHome && <NextMeetingCard />}
     </div>
   );
 }

@@ -1,8 +1,8 @@
 // Página de aniversariantes: filtro por mês, grid de cards e CRUD de admin.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Cake, Plus, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Aniversariante } from "@/lib/types";
+import type { Aniversariante, Pessoa } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { iniciais } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
@@ -12,6 +12,81 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+/** Campo de nome com busca no diretório do Entra: filtra por nome e, ao escolher,
+ *  devolve a pessoa para autopreencher área e foto. Também aceita texto livre. */
+function PersonPicker({
+  value,
+  pessoas,
+  onText,
+  onPick,
+}: {
+  value: string;
+  pessoas: Pessoa[];
+  onText: (nome: string) => void;
+  onPick: (p: Pessoa) => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const fecharRef = useRef<number | null>(null);
+
+  const sugestoes = useMemo(() => {
+    const termo = value.trim().toLowerCase();
+    const base = termo
+      ? pessoas.filter((p) => p.nome.toLowerCase().includes(termo))
+      : pessoas;
+    return base.slice(0, 8);
+  }, [value, pessoas]);
+
+  return (
+    <div className="relative">
+      <Input
+        id="aniv-nome"
+        value={value}
+        autoComplete="off"
+        placeholder={pessoas.length ? "Digite para buscar no diretório…" : "Nome do aniversariante"}
+        onChange={(e) => {
+          onText(e.target.value);
+          setAberto(true);
+        }}
+        onFocus={() => setAberto(true)}
+        onBlur={() => {
+          // Pequeno atraso para permitir o clique numa sugestão antes de fechar.
+          fecharRef.current = window.setTimeout(() => setAberto(false), 150);
+        }}
+        required
+      />
+      {aberto && pessoas.length > 0 && sugestoes.length > 0 && (
+        <ul className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+          {sugestoes.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onPick(p);
+                  if (fecharRef.current) window.clearTimeout(fecharRef.current);
+                  setAberto(false);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-secondary"
+              >
+                <Avatar className="size-8 shrink-0">
+                  {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}
+                  <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
+                    {iniciais(p.nome)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">{p.nome}</span>
+                  {p.area && <span className="block truncate text-xs text-muted-foreground">{p.area}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const MESES = [
   "janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -26,6 +101,9 @@ export default function AniversariantesPage() {
   // então o admin sempre pode adicionar quem faltar — inclusive em modo Graph.
   const editavel = isAdmin;
   const { data, loading, reload } = useAsync(() => api.aniversariantes.list(), []);
+  // Diretório do Entra para o seletor de nome (só admin, que é quem cadastra).
+  const { data: org } = useAsync(() => (isAdmin ? api.org() : Promise.resolve(null)), [isAdmin]);
+  const pessoas = useMemo(() => org?.diretorio ?? [], [org]);
 
   const [mesFiltro, setMesFiltro] = useState<number>(new Date().getMonth() + 1);
 
@@ -162,12 +240,14 @@ export default function AniversariantesPage() {
         onSubmit={submeter}
         submitting={submitting}
       >
-        <Field label="Nome" htmlFor="aniv-nome">
-          <Input
-            id="aniv-nome"
+        <Field label="Nome" htmlFor="aniv-nome" hint={pessoas.length ? "Busque a pessoa no diretório — área e foto são preenchidas automaticamente." : undefined}>
+          <PersonPicker
             value={form.nome ?? ""}
-            onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
-            required
+            pessoas={pessoas}
+            onText={(nome) => setForm((f) => ({ ...f, nome }))}
+            onPick={(p) =>
+              setForm((f) => ({ ...f, nome: p.nome, area: p.area ?? "", fotoUrl: p.fotoUrl }))
+            }
           />
         </Field>
         <Field label="Área" htmlFor="aniv-area">

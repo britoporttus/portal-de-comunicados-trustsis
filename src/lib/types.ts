@@ -65,6 +65,8 @@ export interface Pessoa {
   telefone?: string;
   fotoUrl?: string;
   tipoContrato?: PublicoAlvo;
+  /** id do gestor (campo manager do Entra) — monta a hierarquia do organograma. */
+  managerId?: string;
 }
 
 export interface Me extends Pessoa {

@@ -106,7 +106,8 @@ export default function OrganogramaPage() {
           {/* Árvore interativa */}
           <TabsContent value="arvore">
             <p className="mb-3 text-xs text-muted-foreground">
-              Clique em um departamento para expandir. Arraste para mover e use a roda do mouse para dar zoom.
+              Hierarquia por gestor (campo <span className="font-medium">manager</span> do Entra ID). Clique no contador
+              de time para expandir/recolher os liderados. Arraste para mover e use a roda do mouse para dar zoom.
             </p>
             <OrgFlow empresa="TrustSis" diretorio={diretorio} />
           </TabsContent>
