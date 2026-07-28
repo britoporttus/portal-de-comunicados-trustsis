@@ -1,8 +1,12 @@
 import express from "express";
 import cors from "cors";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
 import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, isGraphOn } from "./graph.js";
+import { requireAuth, authRequired } from "./auth.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
 } from "./types.js";
@@ -12,9 +16,13 @@ app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 // ---------- meta / saúde ----------
+// Health fica ANTES da barreira (monitoração externa não precisa de token).
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, graph: isGraphOn, mode: isGraphOn ? "graph" : "demo" });
+  res.json({ ok: true, graph: isGraphOn, mode: isGraphOn ? "graph" : "demo", auth: authRequired });
 });
+
+// Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando AUTH_REQUIRED off).
+app.use("/api", requireAuth);
 
 // ---------- pessoa atual / Graph ----------
 app.get("/api/me", async (req, res) => {
@@ -195,7 +203,25 @@ app.delete("/api/links/:id", (req, res) => {
 
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
 
+// ---------- estático (produção): serve o SPA buildado no MESMO origin da API ----------
+// Na VM, o backend serve tanto /api quanto o front (dist/), então MSAL redirectUri e as
+// chamadas /api ficam same-origin (https://portal.trustsis.com). Em dev isto não roda
+// (o Vite serve o front e faz proxy /api). SERVE_STATIC força o caminho de produção.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.resolve(here, "../../dist"); // server/src -> raiz/dist
+if (process.env.SERVE_STATIC === "true" && fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  // SPA fallback: qualquer rota não-/api devolve o index.html (BrowserRouter).
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+  console.log(`[portal-trustsis] servindo SPA estático de ${distDir}`);
+}
+
 const port = config.apiPort;
 app.listen(port, "0.0.0.0", () => {
-  console.log(`[portal-trustsis] API on :${port} — modo ${graphEnabled ? "GRAPH (Entra)" : "DEMO"}`);
+  console.log(
+    `[portal-trustsis] API on :${port} — modo ${graphEnabled ? "GRAPH (Entra)" : "DEMO"}` +
+    ` — barreira ${authRequired ? "ATIVA (AUTH_REQUIRED)" : "off"}`,
+  );
 });

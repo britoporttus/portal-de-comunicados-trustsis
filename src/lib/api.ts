@@ -3,11 +3,19 @@ import type {
   Me, AgendaItem, OrgNode, Ausencia,
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
 } from "./types";
+import { getAuthToken } from "./auth";
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
+  // Barreira de identidade: quando o SSO está ativo (produção), anexa o idToken como
+  // Bearer. No preview (auth desligado) getAuthToken() devolve null e nada muda.
+  const token = await getAuthToken();
   const r = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(opts?.headers ?? {}),
+    },
   });
   if (!r.ok) throw new Error(`API ${r.status} em ${path}`);
   if (r.status === 204) return undefined as T;
