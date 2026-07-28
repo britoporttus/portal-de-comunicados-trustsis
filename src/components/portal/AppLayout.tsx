@@ -81,10 +81,23 @@ export default function AppLayout() {
             </SheetContent>
           </Sheet>
 
-          <div className="relative hidden max-w-sm flex-1 md:block">
+          <form
+            className="relative hidden max-w-md flex-1 md:block"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = new FormData(e.currentTarget).get("q")?.toString().trim();
+              if (q) window.open(`https://www.bing.com/search?q=${encodeURIComponent(q)}`, "_blank", "noopener");
+            }}
+          >
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar no portal…" className="pl-9" />
-          </div>
+            <Input
+              name="q"
+              type="search"
+              placeholder="Buscar na web…"
+              className="pl-9"
+              aria-label="Buscar na web"
+            />
+          </form>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {me?.isAdmin && (

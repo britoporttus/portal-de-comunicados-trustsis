@@ -8,7 +8,7 @@ import { useAsync } from "@/lib/useAsync";
 import {
   dataLonga, diaSemana, faixaHorario, tempoRelativo, mesAtualNome, iniciais,
 } from "@/lib/format";
-import { iconForLink, CategoriaBadge } from "@/components/portal/shared";
+import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import hero from "@/assets/hero.png";
@@ -83,23 +83,20 @@ export default function HomePage() {
           <LinhaVazia texto="Nenhum atalho cadastrado." />
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {(links.data ?? []).slice(0, 12).map((l) => {
-              const Icon = iconForLink(l.icon);
-              return (
-                <a
-                  key={l.id}
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-secondary"
-                >
-                  <span className="flex size-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
-                </a>
-              );
-            })}
+            {(links.data ?? []).slice(0, 12).map((l) => (
+              <a
+                key={l.id}
+                href={l.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+              >
+                <span className="flex size-10 items-center justify-center rounded-xl bg-secondary">
+                  <LinkIcon url={l.url} icon={l.icon} className="size-6" />
+                </span>
+                <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
+              </a>
+            ))}
           </div>
         )}
       </section>

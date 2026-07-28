@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, isGraphOn } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, isGraphOn } from "./graph.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
 } from "./types.js";
@@ -46,12 +46,15 @@ function crud<T extends { id: string }>(
   key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social",
   idPrefix: string,
   sort?: (a: T, b: T) => number,
+  skipList = false,
 ) {
-  app.get(`/api/${path}`, (_req, res) => {
-    const list = [...(getStore()[key] as unknown as T[])];
-    if (sort) list.sort(sort);
-    res.json(list);
-  });
+  if (!skipList) {
+    app.get(`/api/${path}`, (_req, res) => {
+      const list = [...(getStore()[key] as unknown as T[])];
+      if (sort) list.sort(sort);
+      res.json(list);
+    });
+  }
   app.post(`/api/${path}`, (req, res) => {
     const item = { ...req.body, id: newId(idPrefix) } as T;
     mutate((s) => (s[key] as unknown as T[]).unshift(item));
@@ -86,7 +89,21 @@ crud<Comunicado>("comunicados", "comunicados", "com", (a, b) => {
   return +new Date(b.publicadoEm) - +new Date(a.publicadoEm);
 });
 crud<Evento>("eventos", "eventos", "evt", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
-crud<Aniversariante>("aniversariantes", "aniversariantes", "ani", (a, b) => a.dia - b.dia);
+
+// Aniversariantes: com Graph ligado, lista os aniversários REAIS do Entra (campo birthday).
+// Sem Graph (demo), usa o store. CRUD de admin segue disponível para o modo demo.
+app.get("/api/aniversariantes", async (_req, res) => {
+  if (isGraphOn) {
+    try {
+      return res.json(await getBirthdays());
+    } catch (e) {
+      return res.status(500).json({ error: (e as Error).message });
+    }
+  }
+  const list = [...getStore().aniversariantes].sort((a, b) => a.dia - b.dia);
+  res.json(list);
+});
+crud<Aniversariante>("aniversariantes", "aniversariantes", "ani", (a, b) => a.dia - b.dia, true);
 crud<LinkUtil>("links", "links", "lnk");
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
 

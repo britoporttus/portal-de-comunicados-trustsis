@@ -32,7 +32,8 @@ export function mockOrg(): OrgNode {
   return {
     ...mockPeople[0],
     gestor: mockPeople[1],
-    liderados: [],
+    liderados: [mockPeople[2], mockPeople[3]],
+    diretorio: mockPeople,
   };
 }
 

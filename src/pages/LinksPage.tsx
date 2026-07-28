@@ -4,7 +4,7 @@ import { LayoutGrid, Plus, Pencil, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import type { LinkUtil } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
-import { iconForLink } from "@/components/portal/shared";
+import { LinkIcon } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
 import { usePortal } from "@/context/PortalProvider";
@@ -93,14 +93,13 @@ export default function LinksPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((l) => {
-            const Icon = iconForLink(l.icon);
             return (
               <div
                 key={l.id}
                 className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
               >
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-                  <Icon className="size-5" />
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary">
+                  <LinkIcon url={l.url} icon={l.icon} className="size-6" />
                 </span>
                 <a
                   href={l.url}

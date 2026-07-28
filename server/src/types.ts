@@ -88,4 +88,5 @@ export interface Ausencia {
 export interface OrgNode extends Pessoa {
   gestor?: Pessoa;
   liderados: Pessoa[];
+  diretorio?: Pessoa[]; // diretório completo da empresa (todos os usuários do Entra)
 }

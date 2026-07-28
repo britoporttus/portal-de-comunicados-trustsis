@@ -3,7 +3,7 @@
 // para que o portal continue funcionando no preview.
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { config, graphEnabled } from "./config.js";
-import type { Pessoa, AgendaItem, Ausencia, OrgNode } from "./types.js";
+import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante } from "./types.js";
 import { mockPeople, mockAgenda, mockOrg, mockVacations } from "./mock.js";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -33,16 +33,45 @@ async function getToken(): Promise<string> {
   return res.accessToken;
 }
 
-async function graphGet<T = any>(path: string): Promise<T> {
+async function graphGetUrl<T = any>(fullUrl: string): Promise<T> {
   const token = await getToken();
-  const r = await fetch(`${GRAPH}${path}`, {
+  const r = await fetch(fullUrl, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
   if (!r.ok) {
     const body = await r.text().catch(() => "");
-    throw new Error(`Graph ${r.status} em ${path}: ${body.slice(0, 300)}`);
+    throw new Error(`Graph ${r.status} em ${fullUrl}: ${body.slice(0, 300)}`);
   }
   return (await r.json()) as T;
+}
+
+async function graphGet<T = any>(path: string): Promise<T> {
+  return graphGetUrl<T>(`${GRAPH}${path}`);
+}
+
+/** Lista TODOS os usuários do diretório (paginando @odata.nextLink), já filtrando
+ *  contas sem nome/e-mail (salas, serviços). `extraSelect` adiciona campos ao $select. */
+async function listAllUsers(extraSelect = ""): Promise<any[]> {
+  const sel = extraSelect ? `${SELECT},${extraSelect}` : SELECT;
+  const out: any[] = [];
+  let next: string | null = `${GRAPH}/users?$select=${sel}&$top=100`;
+  let guard = 0;
+  while (next && guard < 25) {
+    const res: { value: any[]; "@odata.nextLink"?: string } = await graphGetUrl(next);
+    out.push(...res.value);
+    next = res["@odata.nextLink"] ?? null;
+    guard++;
+  }
+  return out.filter((u) => u.displayName && (u.mail || u.userPrincipalName));
+}
+
+/** Preenche fotoUrl de várias pessoas em paralelo (best-effort). */
+async function attachPhotos(pessoas: Pessoa[]): Promise<void> {
+  await Promise.all(
+    pessoas.map(async (p) => {
+      p.fotoUrl = await fetchPhotoDataUrl(p.id);
+    }),
+  );
 }
 
 function mapPessoa(u: any): Pessoa {
@@ -134,50 +163,99 @@ export async function getAgenda(upn?: string): Promise<AgendaItem[]> {
   }
 }
 
-/** Organograma: pessoa + gestor + liderados (Org Explorer via manager do Entra). */
+/** Organograma: estrutura pessoal (gestor/liderados) + diretório COMPLETO da empresa
+ *  (todos os usuários reais do Entra), para não depender só da cadeia de manager. */
 export async function getOrg(upn?: string): Promise<OrgNode> {
   const target = upn || config.entra.demoUserUpn;
   if (!graphEnabled || !target) return mockOrg();
   try {
     const u = await graphGet(`/users/${encodeURIComponent(target)}?$select=${SELECT}`);
     const self = mapPessoa(u);
+    self.fotoUrl = await fetchPhotoDataUrl(target);
+
     let gestor: Pessoa | undefined;
     try {
       const m = await graphGet(`/users/${encodeURIComponent(target)}/manager?$select=${SELECT}`);
       gestor = mapPessoa(m);
+      gestor.fotoUrl = await fetchPhotoDataUrl(gestor.id);
     } catch { /* topo da cadeia */ }
+
     let liderados: Pessoa[] = [];
     try {
       const dr = await graphGet<{ value: any[] }>(
         `/users/${encodeURIComponent(target)}/directReports?$select=${SELECT}`,
       );
       liderados = dr.value.map(mapPessoa);
+      await attachPhotos(liderados);
     } catch { /* sem liderados */ }
-    return { ...self, gestor, liderados };
+
+    let diretorio: Pessoa[] = [];
+    try {
+      diretorio = (await listAllUsers()).map(mapPessoa);
+      await attachPhotos(diretorio);
+      diretorio.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    } catch (e) {
+      console.warn("[graph] getOrg diretório falhou:", (e as Error).message);
+    }
+
+    return { ...self, gestor, liderados, diretorio };
   } catch (e) {
     console.warn("[graph] getOrg falhou, usando demo:", (e as Error).message);
     return mockOrg();
   }
 }
 
-/** Quem está de férias/ausente: lê automaticRepliesSetting (out-of-office) via Graph. */
+/** Aniversariantes REAIS: lê o campo `birthday` de cada usuário do Entra (User.Read.All).
+ *  Em modo demo retorna vazio (o endpoint cai para o store). */
+export async function getBirthdays(): Promise<Aniversariante[]> {
+  if (!graphEnabled) return [];
+  try {
+    const users = await listAllUsers("birthday");
+    const comData = users.filter((u) => {
+      if (!u.birthday) return false;
+      // Graph devolve "0001-01-01T..." quando não há aniversário cadastrado.
+      return !String(u.birthday).startsWith("0001");
+    });
+    const list = await Promise.all(
+      comData.map(async (u) => {
+        const d = new Date(u.birthday);
+        const p: Aniversariante = {
+          id: u.id,
+          nome: u.displayName ?? "—",
+          area: u.department ?? "",
+          dia: d.getUTCDate(),
+          mes: d.getUTCMonth() + 1,
+          fotoUrl: await fetchPhotoDataUrl(u.id),
+        };
+        return p;
+      }),
+    );
+    return list.sort((a, b) => a.mes - b.mes || a.dia - b.dia);
+  } catch (e) {
+    console.warn("[graph] getBirthdays falhou:", (e as Error).message);
+    return [];
+  }
+}
+
+/** Quem está de férias/ausente: lê automaticRepliesSetting (out-of-office) via Graph.
+ *  Quando o Graph está ligado, retorna dados REAIS — inclusive lista vazia (ninguém
+ *  ausente). Só cai para dados demo quando o Graph está desligado ou falha por completo. */
 export async function getVacations(): Promise<Ausencia[]> {
   if (!graphEnabled) return mockVacations();
   try {
-    // amostra de usuários (bounded) — idealmente membros do grupo "todos"
-    const res = await graphGet<{ value: any[] }>(
-      `/users?$select=${SELECT}&$top=20`,
-    );
+    const users = (await listAllUsers()).slice(0, 200);
     const out: Ausencia[] = [];
     await Promise.all(
-      res.value.map(async (u) => {
+      users.map(async (u) => {
         try {
           const s = await graphGet<any>(
             `/users/${encodeURIComponent(u.id)}/mailboxSettings/automaticRepliesSetting`,
           );
           if (s?.status && s.status !== "disabled") {
+            const pessoa = mapPessoa(u);
+            pessoa.fotoUrl = await fetchPhotoDataUrl(u.id);
             out.push({
-              pessoa: mapPessoa(u),
+              pessoa,
               mensagem: (s.internalReplyMessage || "").replace(/<[^>]+>/g, "").trim().slice(0, 160) || undefined,
               ate: s.scheduledEndDateTime?.dateTime ? `${s.scheduledEndDateTime.dateTime}Z` : undefined,
             });
@@ -185,7 +263,8 @@ export async function getVacations(): Promise<Ausencia[]> {
         } catch { /* mailbox sem permissão/erro: ignora */ }
       }),
     );
-    return out.length ? out : mockVacations();
+    out.sort((a, b) => a.pessoa.nome.localeCompare(b.pessoa.nome, "pt-BR"));
+    return out; // REAL, mesmo que vazio
   } catch (e) {
     console.warn("[graph] getVacations falhou, usando demo:", (e as Error).message);
     return mockVacations();

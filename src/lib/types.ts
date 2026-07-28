@@ -83,4 +83,5 @@ export interface Ausencia {
 export interface OrgNode extends Pessoa {
   gestor?: Pessoa;
   liderados: Pessoa[];
+  diretorio?: Pessoa[];
 }

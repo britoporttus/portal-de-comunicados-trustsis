@@ -21,7 +21,9 @@ const MESES = [
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AniversariantesPage() {
-  const { isAdmin } = usePortal();
+  const { isAdmin, mode } = usePortal();
+  // Com Graph ligado os aniversários vêm do Entra (campo birthday) — leitura apenas.
+  const editavel = isAdmin && mode !== "graph";
   const { data, loading, reload } = useAsync(() => api.aniversariantes.list(), []);
 
   const [mesFiltro, setMesFiltro] = useState<number>(new Date().getMonth() + 1);
@@ -93,7 +95,7 @@ export default function AniversariantesPage() {
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-            {isAdmin && (
+            {editavel && (
               <Button onClick={abrirNovo}>
                 <Plus /> Adicionar
               </Button>
@@ -130,7 +132,7 @@ export default function AniversariantesPage() {
                 </div>
               </div>
 
-              {isAdmin && (
+              {editavel && (
                 <div className="flex items-center justify-end gap-1 border-t border-border pt-2">
                   <Button
                     variant="ghost"

@@ -1,4 +1,5 @@
 // Componentes/utilitários visuais compartilhados do portal.
+import { useMemo, useState } from "react";
 import {
   Mail, Users, Cloud, Folder, LayoutGrid, LifeBuoy, Link2, Globe, Calendar,
   Video, MapPin, type LucideIcon,
@@ -16,6 +17,39 @@ const LINK_ICONS: Record<string, LucideIcon> = {
 
 export function iconForLink(key: string): LucideIcon {
   return LINK_ICONS[key] ?? Link2;
+}
+
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Ícone de um atalho: usa o FAVICON real do site do link (ex.: o ícone do Outlook,
+ * Teams, SharePoint…). Se o favicon não carregar, cai no ícone lucide configurado.
+ */
+export function LinkIcon({
+  url, icon, className,
+}: { url: string; icon?: string; className?: string }) {
+  const host = useMemo(() => hostFromUrl(url), [url]);
+  const [erro, setErro] = useState(false);
+  const Fallback = iconForLink(icon ?? "");
+
+  if (!host || erro) {
+    return <Fallback className={cn("size-5", className)} />;
+  }
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`}
+      alt=""
+      loading="lazy"
+      onError={() => setErro(true)}
+      className={cn("size-6 rounded", className)}
+    />
+  );
 }
 
 export function Brand({ compact = false }: { compact?: boolean }) {
