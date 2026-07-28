@@ -1,0 +1,48 @@
+/* GERADO pelo Hive a partir de design/tokens.json — NÃO edite à mão; ajuste os tokens. */
+:root {
+  --radius: 10px;
+  --spacing: 4px;
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-base: 13px;
+  --type-scale: 1.2;
+  --background: #fafdf6;
+  --foreground: #2d2a32;
+  --card: #ffffff;
+  --card-foreground: #2d2a32;
+  --muted: #f2f4ec;
+  --muted-foreground: #7a7c74;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f4ec;
+  --secondary-foreground: #2d2a32;
+  --accent: #fff1e7;
+  --accent-foreground: #c2560a;
+  --border: rgba(45,42,50,0.09);
+  --input: #ffffff;
+  --ring: #f97316;
+  --destructive: #d6403a;
+  --success: #1f9d57;
+  --warning: #b8841f;
+}
+
+.dark {
+  --background: #1a1a1c;
+  --foreground: #f4f4f2;
+  --card: #232326;
+  --card-foreground: #f4f4f2;
+  --muted: #2b2b2f;
+  --muted-foreground: #a6a6a2;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #2b2b2f;
+  --secondary-foreground: #f4f4f2;
+  --accent: #33291f;
+  --accent-foreground: #fb923c;
+  --border: rgba(255,255,255,0.08);
+  --input: #2b2b2f;
+  --ring: #f97316;
+  --destructive: #ff8a82;
+  --success: #5ec98a;
+  --warning: #e0bd5f;
+}

@@ -1,0 +1,140 @@
+/* ──────────────────────────────────────────────────────────────────────────────
+ * HIVE — FOUNDATION (profundidade de brand kit)
+ *
+ * Escalas e tokens "de fundação" do design system do Hive: NEUTROS (ink), PRIMÁRIA (laranja),
+ * SEMÂNTICAS, TIPOGRAFIA (por papel), SPACING, RADII, SHADOWS, Z, MOTION e CONTAINERS.
+ *
+ * É AUTORADO (estável) — o "Aplicar design" do Hive só regenera `tokens.css` (as 18 cores semânticas
+ * editáveis). Aqui ficam as ESCALAS e a tipografia, que dão a "profundidade" e NÃO são sobrescritas.
+ * O `tokens.css` (semântico) referencia estas escalas; mexer no tema troca a primária/superfícies, a
+ * profundidade permanece. Inspirado em brand kits do Claude design (ink 0–950, primária 50–900, type por papel).
+ * ────────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── NEUTROS (ink) — porcelana → cinza-sombra → quase-preto ───────────────── */
+  --ink-0:   #ffffff;
+  --ink-50:  #fafdf6;  /* porcelana (paper) */
+  --ink-100: #f2f4ec;
+  --ink-200: #e6e8e0;
+  --ink-300: #d2d5cb;
+  --ink-400: #a8aba2;
+  --ink-500: #7a7c74;
+  --ink-600: #565a52;
+  --ink-700: #3e4039;
+  --ink-800: #2d2a32;  /* shadow gray (ink base) */
+  --ink-900: #1a1a1c;
+  --ink-950: #111014;
+
+  /* ── PRIMÁRIA (laranja do Hive) — escala 50–900 ──────────────────────────── */
+  --primary-50:  #fff7ed;
+  --primary-100: #ffedd5;
+  --primary-200: #fed7aa;
+  --primary-300: #fdba74;
+  --primary-400: #fb923c;
+  --primary-500: #f97316;  /* brand */
+  --primary-600: #ea580c;
+  --primary-700: #c2410c;
+  --primary-800: #9a3412;
+  --primary-900: #7c2d12;
+  --primary-soft:  var(--primary-100);
+  --primary-hover: var(--primary-600);
+  --primary-active:var(--primary-700);
+
+  /* Primárias SELECIONÁVEIS (estilo brand kit — todas claras pra texto-ink legível). Troque --primary-500
+     e a UI re-tematiza. (v1: as opções; o picker de tema vem numa fase seguinte.) */
+  --pick-orange: #f97316;
+  --pick-amber:  #f59e0b;
+  --pick-lime:   #84cc16;
+  --pick-emerald:#10b981;
+  --pick-sky:    #0ea5e9;
+  --pick-violet: #8b5cf6;
+
+  /* ── SEMÂNTICAS (base + soft + foreground) ───────────────────────────────── */
+  --success-500: #1f9d57;  --success-soft: #e3f5ea;  --success-fg: #0c5a30;
+  --warning-500: #b8841f;  --warning-soft: #fbf1da;  --warning-fg: #6b4a06;
+  --danger-500:  #d6403a;  --danger-soft:  #fbe6e5;  --danger-fg:  #7c1d1a;
+  --info-500:    #2f74c0;  --info-soft:    #e4eef9;  --info-fg:    #173a63;
+
+  /* ── SUPERFÍCIES (referenciam a escala neutra) ───────────────────────────── */
+  --surface-card:    var(--ink-0);
+  --surface-raised:  var(--ink-0);
+  --surface-sunken:  var(--ink-100);
+  --surface-inverse: var(--ink-900);
+
+  /* ── TIPOGRAFIA ──────────────────────────────────────────────────────────── */
+  --font-display: Inter, system-ui, -apple-system, sans-serif;
+  --font-sans:    Inter, system-ui, -apple-system, sans-serif;
+  --font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.7;
+
+  --tracking-tighter: -0.02em;
+  --tracking-tight:   -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.02em;
+  --tracking-wider:   0.08em;  /* eyebrow/label */
+
+  /* Escala tipográfica por PAPEL (size · usar com --leading-/--fw-/--tracking- acima) */
+  --text-display: 40px;
+  --text-h1:      32px;
+  --text-h2:      24px;
+  --text-h3:      20px;
+  --text-lg:      16px;
+  --text-body:    14px;
+  --text-sm:      13px;
+  --text-label:   12px;
+  --text-eyebrow: 11px;
+  --text-mono:    13px;
+
+  /* ── SPACING (escala 4px) ────────────────────────────────────────────────── */
+  --space-1:  4px;   --space-2:  8px;   --space-3:  12px;  --space-4:  16px;
+  --space-5:  20px;  --space-6:  24px;  --space-8:  32px;  --space-10: 40px;
+  --space-12: 48px;  --space-16: 64px;  --space-20: 80px;  --space-24: 96px;
+
+  /* ── RADII ───────────────────────────────────────────────────────────────── */
+  --radius-sm:  6px;
+  --radius-md:  10px;   /* controles */
+  --radius-lg:  14px;   /* cards */
+  --radius-xl:  20px;   /* painéis */
+  --radius-2xl: 28px;
+  --radius-full:9999px;
+
+  /* ── SHADOWS (frias, low-spread) ─────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(17,16,20,0.06);
+  --shadow-md: 0 2px 8px rgba(17,16,20,0.08), 0 1px 2px rgba(17,16,20,0.04);
+  --shadow-lg: 0 8px 24px rgba(17,16,20,0.10), 0 2px 6px rgba(17,16,20,0.06);
+  --shadow-xl: 0 16px 48px rgba(17,16,20,0.14);
+  --glow-primary: 0 0 0 3px color-mix(in srgb, var(--primary-500) 22%, transparent);
+
+  /* ── Z-INDEX / CONTAINERS ────────────────────────────────────────────────── */
+  --z-base: 0; --z-dropdown: 1000; --z-sticky: 1100; --z-overlay: 1200; --z-modal: 1300; --z-toast: 1400;
+  --container-sm: 640px; --container-md: 768px; --container-lg: 1024px; --container-xl: 1280px;
+  --gutter: var(--space-6);
+
+  /* ── MOTION ──────────────────────────────────────────────────────────────── */
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base:  all var(--dur-base) var(--ease-out);
+  --transition-color: color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+/* Console escuro: inverte as superfícies puxando da escala neutra (a primária/semânticas seguem). */
+.dark {
+  --surface-card:    var(--ink-900);
+  --surface-raised:  #232326;
+  --surface-sunken:  var(--ink-950);
+  --surface-inverse: var(--ink-50);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.6);
+}
