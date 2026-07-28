@@ -32,3 +32,4 @@ coverage
 .cache
 .env
 .env.local
+.hive-shot.png
