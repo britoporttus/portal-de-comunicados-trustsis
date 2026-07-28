@@ -1,0 +1,66 @@
+// Componentes/utilitários visuais compartilhados do portal.
+import {
+  Mail, Users, Cloud, Folder, LayoutGrid, LifeBuoy, Link2, Globe, Calendar,
+  Video, MapPin, type LucideIcon,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
+import type { Categoria, Prioridade } from "@/lib/types";
+import logo from "@/assets/logo-trustsis.png";
+
+const LINK_ICONS: Record<string, LucideIcon> = {
+  mail: Mail, users: Users, cloud: Cloud, folder: Folder,
+  "layout-grid": LayoutGrid, "life-buoy": LifeBuoy, calendar: Calendar, video: Video,
+};
+
+export function iconForLink(key: string): LucideIcon {
+  return LINK_ICONS[key] ?? Link2;
+}
+
+export function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <img src={logo} alt="TrustSis" className="h-8 w-auto rounded bg-white/90 px-1.5 py-1 shadow-sm" />
+      {!compact && (
+        <div className="leading-tight">
+          <div className="text-sm font-semibold text-foreground">Portal Interno</div>
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">TrustSis</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CategoriaBadge({ categoria }: { categoria: Categoria }) {
+  const m = CATEGORIA_META[categoria];
+  return <Badge variant="outline" className={cn("font-medium", m.className)}>{m.label}</Badge>;
+}
+
+export function PrioridadeBadge({ prioridade }: { prioridade: Prioridade }) {
+  const m = PRIORIDADE_META[prioridade];
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium", m.className)}>
+      <span className={cn("size-1.5 rounded-full", m.dot)} />
+      {m.label}
+    </span>
+  );
+}
+
+const REDE_META: Record<string, { label: string; className: string }> = {
+  linkedin: { label: "in", className: "bg-[#0a66c2] text-white" },
+  instagram: { label: "IG", className: "bg-gradient-to-br from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white" },
+  facebook: { label: "f", className: "bg-[#1877f2] text-white" },
+  youtube: { label: "YT", className: "bg-[#ff0000] text-white" },
+};
+
+export function RedeIcon({ rede }: { rede: string }) {
+  const m = REDE_META[rede] ?? { label: "?", className: "bg-muted text-muted-foreground" };
+  return (
+    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold", m.className)}>
+      {m.label}
+    </span>
+  );
+}
+
+export { Globe, MapPin };

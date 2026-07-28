@@ -25,17 +25,17 @@
   --ink-900: #1a1a1c;
   --ink-950: #111014;
 
-  /* ── PRIMÁRIA (laranja do Hive) — escala 50–900 ──────────────────────────── */
-  --primary-50:  #fff7ed;
-  --primary-100: #ffedd5;
-  --primary-200: #fed7aa;
-  --primary-300: #fdba74;
-  --primary-400: #fb923c;
-  --primary-500: #f97316;  /* brand */
-  --primary-600: #ea580c;
-  --primary-700: #c2410c;
-  --primary-800: #9a3412;
-  --primary-900: #7c2d12;
+  /* ── PRIMÁRIA (ciano TrustSis #00ABD6) — escala 50–900 ───────────────────── */
+  --primary-50:  #ecfbff;
+  --primary-100: #d0f3fc;
+  --primary-200: #a6e9f8;
+  --primary-300: #6fd9f1;
+  --primary-400: #2ec3e4;
+  --primary-500: #00abd6;  /* brand TrustSis */
+  --primary-600: #0090bb;
+  --primary-700: #0a7397;
+  --primary-800: #135d7b;
+  --primary-900: #154d67;
   --primary-soft:  var(--primary-100);
   --primary-hover: var(--primary-600);
   --primary-active:var(--primary-700);

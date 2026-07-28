@@ -11,5 +11,13 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
-  server: { host: true },
+  server: {
+    host: true,
+    proxy: {
+      "/api": {
+        target: process.env.BACKEND_INTERNAL_URL || "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+    },
+  },
 });

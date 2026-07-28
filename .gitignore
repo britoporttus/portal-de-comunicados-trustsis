@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+uploads/
+.hive/
+build
+.next
+out
+coverage
+.turbo
+.cache
+.env
+.env.local
