@@ -74,6 +74,15 @@ async function attachPhotos(pessoas: Pessoa[]): Promise<void> {
   );
 }
 
+/** Deriva o tipo de contrato (CLT/PJ) a partir do campo livre employeeType do Entra. */
+function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
+  const t = (employeeType ?? "").toLowerCase();
+  if (!t) return undefined;
+  if (/\bpj\b|contractor|prestador|terceir|autonom/.test(t)) return "pj";
+  if (/\bclt\b|employee|funcion|efetiv|colaborador/.test(t)) return "clt";
+  return undefined;
+}
+
 function mapPessoa(u: any): Pessoa {
   return {
     id: u.id,
@@ -82,10 +91,12 @@ function mapPessoa(u: any): Pessoa {
     area: u.department ?? undefined,
     email: u.mail ?? u.userPrincipalName ?? undefined,
     telefone: u.mobilePhone ?? (u.businessPhones?.[0] as string) ?? undefined,
+    tipoContrato: tipoContratoDe(u.employeeType),
   };
 }
 
-const SELECT = "id,displayName,jobTitle,department,mail,userPrincipalName,mobilePhone,businessPhones";
+const SELECT =
+  "id,displayName,jobTitle,department,mail,userPrincipalName,mobilePhone,businessPhones,employeeType,accountEnabled";
 
 async function fetchPhotoDataUrl(idOrUpn: string): Promise<string | undefined> {
   try {
@@ -191,7 +202,13 @@ export async function getOrg(upn?: string): Promise<OrgNode> {
 
     let diretorio: Pessoa[] = [];
     try {
-      diretorio = (await listAllUsers()).map(mapPessoa);
+      const brutos = (await listAllUsers()).filter((u) => {
+        // Somente usuários ATIVOS no Entra e com e-mail do domínio @trustsis.com.
+        if (u.accountEnabled === false) return false;
+        const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
+        return mail.endsWith("@trustsis.com");
+      });
+      diretorio = brutos.map(mapPessoa);
       await attachPhotos(diretorio);
       diretorio.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     } catch (e) {

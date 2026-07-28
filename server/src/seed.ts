@@ -46,17 +46,21 @@ export function seedData(): Store {
         prioridade: "alta",
         autor: "Segurança da Informação",
         publicadoEm: daysFromNow(-3, 14, 0),
+        obrigatorio: true,
+        publico: "todos",
+        leituras: [],
       },
       {
         id: "com_4",
         titulo: "Benefício de vale-cultura disponível",
         resumo: "RH anuncia novo benefício para todos os colaboradores CLT.",
         conteudo:
-          "A partir deste mês, todos os colaboradores passam a contar com o vale-cultura. A adesão é opcional e pode ser feita pelo portal de benefícios. Dúvidas com o time de Pessoas.",
+          "A partir deste mês, todos os colaboradores CLT passam a contar com o vale-cultura. A adesão é opcional e pode ser feita pelo portal de benefícios. Dúvidas com o time de Pessoas.",
         categoria: "rh",
         prioridade: "baixa",
         autor: "Recursos Humanos",
         publicadoEm: daysFromNow(-5, 11, 0),
+        publico: "clt",
       },
     ],
     eventos: [

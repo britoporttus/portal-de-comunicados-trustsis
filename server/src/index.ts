@@ -88,23 +88,102 @@ crud<Comunicado>("comunicados", "comunicados", "com", (a, b) => {
   if (!!b.fixado !== !!a.fixado) return b.fixado ? 1 : -1;
   return +new Date(b.publicadoEm) - +new Date(a.publicadoEm);
 });
+
+// Confirmação de leitura de um comunicado obrigatório. Registra o e-mail/UPN do usuário.
+app.post("/api/comunicados/:id/ler", (req, res) => {
+  const upn = String(req.body?.upn || "").toLowerCase();
+  if (!upn) return res.status(400).json({ error: "upn obrigatório" });
+  const updated = mutate((s) => {
+    const c = s.comunicados.find((x) => x.id === req.params.id);
+    if (!c) return null;
+    if (!c.leituras) c.leituras = [];
+    if (!c.leituras.includes(upn)) c.leituras.push(upn);
+    return c;
+  });
+  if (!updated) return res.status(404).json({ error: "não encontrado" });
+  res.json(updated);
+});
 crud<Evento>("eventos", "eventos", "evt", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
 
-// Aniversariantes: com Graph ligado, lista os aniversários REAIS do Entra (campo birthday).
-// Sem Graph (demo), usa o store. CRUD de admin segue disponível para o modo demo.
+// Aniversariantes: com Graph ligado, mescla os aniversários REAIS do Entra (campo birthday)
+// com os cadastrados manualmente pelo admin (store) — assim é sempre possível adicionar
+// alguém mesmo em modo Graph. Sem Graph (demo), usa só o store.
 app.get("/api/aniversariantes", async (_req, res) => {
+  const manuais = [...getStore().aniversariantes];
   if (isGraphOn) {
     try {
-      return res.json(await getBirthdays());
+      const doEntra = await getBirthdays();
+      // Evita duplicar quem já veio do Entra (mesmo id).
+      const ids = new Set(doEntra.map((a) => a.id));
+      const merge = [...doEntra, ...manuais.filter((a) => !ids.has(a.id))];
+      merge.sort((a, b) => a.mes - b.mes || a.dia - b.dia);
+      return res.json(merge);
     } catch (e) {
       return res.status(500).json({ error: (e as Error).message });
     }
   }
-  const list = [...getStore().aniversariantes].sort((a, b) => a.dia - b.dia);
-  res.json(list);
+  manuais.sort((a, b) => a.dia - b.dia);
+  res.json(manuais);
 });
 crud<Aniversariante>("aniversariantes", "aniversariantes", "ani", (a, b) => a.dia - b.dia, true);
-crud<LinkUtil>("links", "links", "lnk");
+// ---------- Links úteis: personalizados por usuário ----------
+// Cada colaborador (admin ou não) mantém seus próprios atalhos. A chave é o UPN/e-mail
+// enviado em ?upn=. No primeiro edit, herda os atalhos padrão para não começar vazio.
+function chaveUsuario(upn?: string): string {
+  return (upn || config.entra.demoUserUpn || "default").toLowerCase();
+}
+
+function linksDoUsuario(chave: string): LinkUtil[] {
+  const s = getStore();
+  return s.linksByUser?.[chave] ?? s.links;
+}
+
+/** Garante que exista um conjunto pessoal (clonado dos padrões na primeira vez). */
+function garanteLinksPessoais(s: import("./types.js").Store, chave: string): LinkUtil[] {
+  if (!s.linksByUser) s.linksByUser = {};
+  if (!s.linksByUser[chave]) {
+    s.linksByUser[chave] = s.links.map((l) => ({ ...l }));
+  }
+  return s.linksByUser[chave];
+}
+
+app.get("/api/links", (req, res) => {
+  res.json(linksDoUsuario(chaveUsuario(req.query.upn as string)));
+});
+
+app.post("/api/links", (req, res) => {
+  const chave = chaveUsuario(req.query.upn as string);
+  const item = { ...req.body, id: newId("lnk") } as LinkUtil;
+  mutate((s) => garanteLinksPessoais(s, chave).push(item));
+  res.status(201).json(item);
+});
+
+app.put("/api/links/:id", (req, res) => {
+  const chave = chaveUsuario(req.query.upn as string);
+  const updated = mutate((s) => {
+    const arr = garanteLinksPessoais(s, chave);
+    const i = arr.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return null;
+    arr[i] = { ...arr[i], ...req.body, id: req.params.id };
+    return arr[i];
+  });
+  if (!updated) return res.status(404).json({ error: "não encontrado" });
+  res.json(updated);
+});
+
+app.delete("/api/links/:id", (req, res) => {
+  const chave = chaveUsuario(req.query.upn as string);
+  const ok = mutate((s) => {
+    const arr = garanteLinksPessoais(s, chave);
+    const i = arr.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return false;
+    arr.splice(i, 1);
+    return true;
+  });
+  if (!ok) return res.status(404).json({ error: "não encontrado" });
+  res.status(204).end();
+});
+
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
 
 const port = config.apiPort;

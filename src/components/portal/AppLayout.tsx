@@ -56,7 +56,7 @@ function Sidebar() {
 }
 
 export default function AppLayout() {
-  const { me, theme, toggleTheme, isAdmin, verComoUsuario, setVerComoUsuario, mode } = usePortal();
+  const { me, theme, toggleTheme, verComoUsuario, setVerComoUsuario, mode } = usePortal();
   const [open, setOpen] = useState(false);
 
   return (
@@ -119,8 +119,8 @@ export default function AppLayout() {
               </Avatar>
               <div className="hidden text-left leading-tight sm:block">
                 <div className="text-xs font-semibold text-foreground">{me?.nome ?? "Colaborador"}</div>
-                <div className="text-[10px] text-muted-foreground">
-                  {isAdmin ? "Administrador" : "Colaborador"}
+                <div className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                  {me?.cargo ?? "Colaborador"}
                 </div>
               </div>
             </div>

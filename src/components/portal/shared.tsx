@@ -27,23 +27,46 @@ function hostFromUrl(url: string): string {
   }
 }
 
+// Ícones oficiais de produtos Microsoft. O favicon genérico (google/office.com) devolve
+// o logo do Copilot para OneDrive/SharePoint/Office, então mapeamos por palavra-chave.
+const ICON8 = (slug: string) => `https://img.icons8.com/color/96/${slug}.png`;
+const PRODUTOS: Array<{ re: RegExp; src: string }> = [
+  { re: /onedrive/, src: ICON8("microsoft-onedrive-2019") },
+  { re: /sharepoint/, src: ICON8("microsoft-sharepoint-2019") },
+  { re: /outlook/, src: ICON8("microsoft-outlook-2019") },
+  { re: /teams/, src: ICON8("microsoft-teams-2019") },
+  { re: /powerbi|power-bi|power bi/, src: ICON8("power-bi") },
+  { re: /planner/, src: ICON8("microsoft-planner") },
+  { re: /\bword\b/, src: ICON8("microsoft-word-2019") },
+  { re: /\bexcel\b/, src: ICON8("microsoft-excel-2019") },
+  { re: /powerpoint/, src: ICON8("microsoft-powerpoint-2019") },
+  { re: /office|microsoft ?365|\bm365\b/, src: ICON8("microsoft-office-2019") },
+];
+
+function produtoIcon(url: string, label?: string): string | undefined {
+  const alvo = `${label ?? ""} ${url}`.toLowerCase();
+  return PRODUTOS.find((p) => p.re.test(alvo))?.src;
+}
+
 /**
- * Ícone de um atalho: usa o FAVICON real do site do link (ex.: o ícone do Outlook,
- * Teams, SharePoint…). Se o favicon não carregar, cai no ícone lucide configurado.
+ * Ícone de um atalho: para produtos Microsoft conhecidos usa o logo oficial do produto;
+ * senão usa o FAVICON real do site; se nada carregar, cai no ícone lucide configurado.
  */
 export function LinkIcon({
-  url, icon, className,
-}: { url: string; icon?: string; className?: string }) {
+  url, icon, label, className,
+}: { url: string; icon?: string; label?: string; className?: string }) {
   const host = useMemo(() => hostFromUrl(url), [url]);
+  const produto = useMemo(() => produtoIcon(url, label), [url, label]);
   const [erro, setErro] = useState(false);
   const Fallback = iconForLink(icon ?? "");
 
-  if (!host || erro) {
+  const src = produto ?? (host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : "");
+  if (!src || erro) {
     return <Fallback className={cn("size-5", className)} />;
   }
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${host}&sz=64`}
+      src={src}
       alt=""
       loading="lazy"
       onError={() => setErro(true)}
@@ -52,16 +75,14 @@ export function LinkIcon({
   );
 }
 
-export function Brand({ compact = false }: { compact?: boolean }) {
+export function Brand() {
   return (
-    <div className="flex items-center gap-2.5">
-      <img src={logo} alt="TrustSis" className="h-8 w-auto rounded bg-white/90 px-1.5 py-1 shadow-sm" />
-      {!compact && (
-        <div className="leading-tight">
-          <div className="text-sm font-semibold text-foreground">Portal Interno</div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">TrustSis</div>
-        </div>
-      )}
+    <div className="flex items-center">
+      <img
+        src={logo}
+        alt="TrustSis"
+        className="h-11 w-auto rounded-lg bg-white/95 px-2.5 py-1.5 shadow-sm"
+      />
     </div>
   );
 }

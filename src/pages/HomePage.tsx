@@ -11,6 +11,7 @@ import {
 import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { usePortal } from "@/context/PortalProvider";
 import hero from "@/assets/hero.png";
 
 function Painel({
@@ -47,54 +48,46 @@ function LinhaVazia({ texto }: { texto: string }) {
 }
 
 export default function HomePage() {
+  const { me } = usePortal();
   const comunicados = useAsync(() => api.comunicados.list());
   const agenda = useAsync(() => api.agenda());
   const eventos = useAsync(() => api.eventos.list());
   const aniversariantes = useAsync(() => api.aniversariantes.list());
-  const links = useAsync(() => api.links.list());
+  const links = useAsync(() => api.links.list(me?.email), [me?.email]);
 
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl border border-border">
-        <img src={hero} alt="" className="h-40 w-full object-cover sm:h-48" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background/90 via-background/60 to-transparent" />
-        <div className="absolute inset-0 flex flex-col justify-center gap-1 px-6">
-          <span className="text-xs font-medium uppercase tracking-wider text-primary">Portal Interno · TrustSis</span>
-          <h2 className="max-w-md text-xl font-semibold text-foreground sm:text-2xl">
-            Tudo o que a TrustSis precisa, em um só lugar
-          </h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Comunicados, agenda, eventos e os sistemas do dia a dia.
-          </p>
-        </div>
+    <div className="relative isolate space-y-6">
+      {/* Imagem de fundo cobrindo toda a página inicial */}
+      <div className="pointer-events-none absolute -inset-x-4 -inset-y-6 -z-10 overflow-hidden lg:-inset-x-8 lg:-inset-y-8">
+        <img src={hero} alt="" className="h-full w-full object-cover opacity-[0.10]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
 
       {/* Acesso rápido */}
       <section>
         <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
         {links.loading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 rounded-xl" />
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
             ))}
           </div>
         ) : (links.data ?? []).length === 0 ? (
           <LinhaVazia texto="Nenhum atalho cadastrado." />
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {(links.data ?? []).slice(0, 12).map((l) => (
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
+            {(links.data ?? []).slice(0, 16).map((l) => (
               <a
                 key={l.id}
                 href={l.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card p-4 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+                className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card/80 p-2.5 text-center shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
               >
-                <span className="flex size-10 items-center justify-center rounded-xl bg-secondary">
-                  <LinkIcon url={l.url} icon={l.icon} className="size-6" />
+                <span className="flex size-8 items-center justify-center rounded-lg bg-secondary">
+                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-5" />
                 </span>
-                <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
+                <span className="line-clamp-1 text-[11px] font-medium text-foreground">{l.label}</span>
               </a>
             ))}
           </div>

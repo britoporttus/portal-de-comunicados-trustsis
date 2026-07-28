@@ -27,8 +27,9 @@ const ICON_OPCOES = [
 const FORM_INICIAL: Partial<LinkUtil> = { label: "", url: "", icon: "link" };
 
 export default function LinksPage() {
-  const { isAdmin } = usePortal();
-  const { data, loading, reload } = useAsync(() => api.links.list());
+  const { me } = usePortal();
+  const upn = me?.email;
+  const { data, loading, reload } = useAsync(() => api.links.list(upn), [upn]);
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -51,8 +52,8 @@ export default function LinksPage() {
     if (!form.label?.trim() || !form.url?.trim()) return;
     setSubmitting(true);
     try {
-      if (editId) await api.links.update(editId, form);
-      else await api.links.create(form);
+      if (editId) await api.links.update(editId, form, upn);
+      else await api.links.create(form, upn);
       await reload();
       setOpen(false);
     } finally {
@@ -61,7 +62,7 @@ export default function LinksPage() {
   };
 
   const excluir = async (id: string) => {
-    await api.links.remove(id);
+    await api.links.remove(id, upn);
     await reload();
   };
 
@@ -72,13 +73,11 @@ export default function LinksPage() {
       <PageHeader
         icon={LayoutGrid}
         title="Links úteis"
-        description="Atalhos para sistemas e ferramentas internas"
+        description="Seus atalhos pessoais — personalize os sistemas que você mais usa"
         action={
-          isAdmin && (
-            <Button onClick={abrirNovo}>
-              <Plus className="size-4" /> Novo link
-            </Button>
-          )
+          <Button onClick={abrirNovo}>
+            <Plus className="size-4" /> Novo link
+          </Button>
         }
       />
 
@@ -99,7 +98,7 @@ export default function LinksPage() {
                 className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
               >
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary">
-                  <LinkIcon url={l.url} icon={l.icon} className="size-6" />
+                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-6" />
                 </span>
                 <a
                   href={l.url}
@@ -113,14 +112,12 @@ export default function LinksPage() {
                   </div>
                   <p className="truncate text-xs text-muted-foreground">{l.url}</p>
                 </a>
-                {isAdmin && (
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => abrirEdicao(l)}>
-                      <Pencil className="size-4" />
-                    </Button>
-                    <ConfirmDelete onConfirm={() => excluir(l.id)} label="Excluir link" />
-                  </div>
-                )}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => abrirEdicao(l)}>
+                    <Pencil className="size-4" />
+                  </Button>
+                  <ConfirmDelete onConfirm={() => excluir(l.id)} label="Excluir link" />
+                </div>
               </div>
             );
           })}

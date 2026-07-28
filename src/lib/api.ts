@@ -26,6 +26,8 @@ export const api = {
     create: (b: Partial<Comunicado>) => req<Comunicado>("/comunicados", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<Comunicado>) => req<Comunicado>(`/comunicados/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/comunicados/${id}`, { method: "DELETE" }),
+    confirmarLeitura: (id: string, upn: string) =>
+      req<Comunicado>(`/comunicados/${id}/ler`, { method: "POST", body: JSON.stringify({ upn }) }),
   },
   eventos: {
     list: () => req<Evento[]>("/eventos"),
@@ -40,10 +42,14 @@ export const api = {
     remove: (id: string) => req<void>(`/aniversariantes/${id}`, { method: "DELETE" }),
   },
   links: {
-    list: () => req<LinkUtil[]>("/links"),
-    create: (b: Partial<LinkUtil>) => req<LinkUtil>("/links", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: string, b: Partial<LinkUtil>) => req<LinkUtil>(`/links/${id}`, { method: "PUT", body: JSON.stringify(b) }),
-    remove: (id: string) => req<void>(`/links/${id}`, { method: "DELETE" }),
+    // Links são personalizados por usuário: passamos o UPN/e-mail do colaborador logado.
+    list: (upn?: string) => req<LinkUtil[]>(`/links${upn ? `?upn=${encodeURIComponent(upn)}` : ""}`),
+    create: (b: Partial<LinkUtil>, upn?: string) =>
+      req<LinkUtil>(`/links${upn ? `?upn=${encodeURIComponent(upn)}` : ""}`, { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<LinkUtil>, upn?: string) =>
+      req<LinkUtil>(`/links/${id}${upn ? `?upn=${encodeURIComponent(upn)}` : ""}`, { method: "PUT", body: JSON.stringify(b) }),
+    remove: (id: string, upn?: string) =>
+      req<void>(`/links/${id}${upn ? `?upn=${encodeURIComponent(upn)}` : ""}`, { method: "DELETE" }),
   },
   social: {
     list: () => req<PublicacaoSocial[]>("/social"),

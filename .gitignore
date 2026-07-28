@@ -33,3 +33,7 @@ coverage
 .env
 .env.local
 .hive-shot.png
+
+# dados de runtime do store JSON
+server/data/
+.hive-ref.png

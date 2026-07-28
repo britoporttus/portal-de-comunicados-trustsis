@@ -1,5 +1,5 @@
-// Página Organograma: estrutura pessoal (gestor/você/liderados) + diretório completo
-// da empresa (todos os usuários reais do Entra), com busca e agrupamento por área.
+// Página Organograma: diretório de colaboradores ATIVOS (@trustsis.com), agrupado
+// apenas por departamento — em duas visões: árvore interativa (reactflow) e lista.
 import { useMemo, useState } from "react";
 import { Network, Mail, Phone, Search, Users } from "lucide-react";
 import { api } from "@/lib/api";
@@ -7,17 +7,14 @@ import type { Pessoa } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { iniciais } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
+import { OrgFlow } from "@/components/portal/OrgFlow";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-function PessoaCard({ pessoa, destaque = false }: { pessoa: Pessoa; destaque?: boolean }) {
+function PessoaCard({ pessoa }: { pessoa: Pessoa }) {
   return (
-    <div
-      className={
-        "flex items-center gap-3 rounded-xl border p-4 shadow-sm " +
-        (destaque ? "border-primary/40 bg-primary/5" : "border-border bg-card")
-      }
-    >
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
       <Avatar className="size-12 shrink-0">
         {pessoa.fotoUrl && <AvatarImage src={pessoa.fotoUrl} alt={pessoa.nome} />}
         <AvatarFallback className="bg-primary/15 text-sm font-semibold text-primary">
@@ -59,7 +56,7 @@ export default function OrganogramaPage() {
 
   const diretorio = data?.diretorio ?? [];
 
-  // Agrupa o diretório por área, filtrando pela busca (nome/cargo/área/e-mail).
+  // Agrupa o diretório por departamento, filtrando pela busca (nome/cargo/área/e-mail).
   const grupos = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const filtrados = diretorio.filter((p) => {
@@ -82,65 +79,51 @@ export default function OrganogramaPage() {
       <PageHeader
         icon={Network}
         title="Organograma"
-        description="Estrutura do seu time e diretório de colaboradores da TrustSis"
+        description="Colaboradores ativos da TrustSis, organizados por departamento"
       />
 
       {loading ? (
         <ListSkeleton rows={4} />
-      ) : !data ? (
+      ) : !data || diretorio.length === 0 ? (
         <EmptyState
           icon={Network}
           title="Sem dados de organograma"
-          description="Não foi possível carregar a estrutura do time."
+          description="Não foi possível carregar os colaboradores no momento."
         />
       ) : (
-        <div className="space-y-10">
-          {/* Estrutura pessoal */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            {data.gestor && (
-              <Secao titulo="Gestor">
-                <PessoaCard pessoa={data.gestor} />
-              </Secao>
-            )}
-            <Secao titulo="Você">
-              <PessoaCard pessoa={data} destaque />
-            </Secao>
+        <Tabs defaultValue="arvore" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="arvore">Organograma</TabsTrigger>
+              <TabsTrigger value="lista">Lista</TabsTrigger>
+            </TabsList>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Users className="size-3.5 text-primary" />
+              {diretorio.length} pessoas · {grupos.length} departamentos
+            </div>
           </div>
 
-          {data.liderados.length > 0 && (
-            <Secao titulo={`Liderados diretos (${data.liderados.length})`}>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {data.liderados.map((p) => (
-                  <PessoaCard key={p.id} pessoa={p} />
-                ))}
-              </div>
-            </Secao>
-          )}
+          {/* Árvore interativa */}
+          <TabsContent value="arvore">
+            <p className="mb-3 text-xs text-muted-foreground">
+              Clique em um departamento para expandir. Arraste para mover e use a roda do mouse para dar zoom.
+            </p>
+            <OrgFlow empresa="TrustSis" diretorio={diretorio} />
+          </TabsContent>
 
-          {/* Diretório completo da empresa */}
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Users className="size-4 text-primary" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Diretório da empresa
-                  <span className="ml-2 font-normal text-muted-foreground">{diretorio.length} pessoas</span>
-                </h2>
-              </div>
-              <div className="relative w-full sm:w-72">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar por nome, cargo ou área…"
-                  className="pl-9"
-                />
-              </div>
+          {/* Lista por departamento */}
+          <TabsContent value="lista" className="space-y-4">
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome, cargo ou área…"
+                className="pl-9"
+              />
             </div>
 
-            {diretorio.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Diretório indisponível no momento.</p>
-            ) : grupos.length === 0 ? (
+            {grupos.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum colaborador encontrado para “{busca}”.</p>
             ) : (
               <div className="space-y-6">
@@ -155,8 +138,8 @@ export default function OrganogramaPage() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

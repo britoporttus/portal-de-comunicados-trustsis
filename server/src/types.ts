@@ -2,6 +2,9 @@
 export type Prioridade = "alta" | "media" | "baixa";
 export type Categoria = "feriado" | "rh" | "ferias" | "interno" | "ti" | "evento";
 
+/** Público-alvo por tipo de contrato. "todos" = sem restrição de contrato. */
+export type PublicoAlvo = "todos" | "clt" | "pj";
+
 export interface Comunicado {
   id: string;
   titulo: string;
@@ -12,6 +15,11 @@ export interface Comunicado {
   autor: string;
   publicadoEm: string; // ISO
   fixado?: boolean;
+  // Segmentação: por tipo de contrato e/ou por departamentos/grupos.
+  publico?: PublicoAlvo; // default "todos"
+  departamentos?: string[]; // vazio/ausente = todos os departamentos
+  obrigatorio?: boolean; // exige confirmação de leitura
+  leituras?: string[]; // e-mails/UPN de quem confirmou a leitura
 }
 
 export interface Evento {
@@ -54,8 +62,10 @@ export interface Store {
   comunicados: Comunicado[];
   eventos: Evento[];
   aniversariantes: Aniversariante[];
-  links: LinkUtil[];
+  links: LinkUtil[]; // atalhos padrão (usados quando o usuário ainda não personalizou)
   social: PublicacaoSocial[];
+  // Links personalizados por usuário (chave = e-mail/UPN). Cada um gerencia os seus.
+  linksByUser?: Record<string, LinkUtil[]>;
 }
 
 // ---- Graph / pessoas ----
@@ -67,6 +77,8 @@ export interface Pessoa {
   email?: string;
   telefone?: string;
   fotoUrl?: string;
+  /** Tipo de contrato derivado do employeeType do Entra ("clt" | "pj"). */
+  tipoContrato?: PublicoAlvo;
 }
 
 export interface AgendaItem {

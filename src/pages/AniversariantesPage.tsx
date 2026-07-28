@@ -21,9 +21,10 @@ const MESES = [
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AniversariantesPage() {
-  const { isAdmin, mode } = usePortal();
-  // Com Graph ligado os aniversários vêm do Entra (campo birthday) — leitura apenas.
-  const editavel = isAdmin && mode !== "graph";
+  const { isAdmin } = usePortal();
+  // Aniversários do Entra (campo birthday) são mesclados com os cadastrados manualmente,
+  // então o admin sempre pode adicionar quem faltar — inclusive em modo Graph.
+  const editavel = isAdmin;
   const { data, loading, reload } = useAsync(() => api.aniversariantes.list(), []);
 
   const [mesFiltro, setMesFiltro] = useState<number>(new Date().getMonth() + 1);

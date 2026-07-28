@@ -2,6 +2,8 @@
 export type Prioridade = "alta" | "media" | "baixa";
 export type Categoria = "feriado" | "rh" | "ferias" | "interno" | "ti" | "evento";
 
+export type PublicoAlvo = "todos" | "clt" | "pj";
+
 export interface Comunicado {
   id: string;
   titulo: string;
@@ -12,6 +14,10 @@ export interface Comunicado {
   autor: string;
   publicadoEm: string;
   fixado?: boolean;
+  publico?: PublicoAlvo;
+  departamentos?: string[];
+  obrigatorio?: boolean;
+  leituras?: string[];
 }
 
 export interface Evento {
@@ -58,6 +64,7 @@ export interface Pessoa {
   email?: string;
   telefone?: string;
   fotoUrl?: string;
+  tipoContrato?: PublicoAlvo;
 }
 
 export interface Me extends Pessoa {
