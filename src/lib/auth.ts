@@ -43,17 +43,54 @@ function instance(): PublicClientApplication {
   return pca;
 }
 
-/** Inicializa a MSAL e resolve o retorno de um eventual redirect de login.
- *  Idempotente e seguro para chamar antes de renderizar o app. No-op se auth desligado. */
+// Guarda anti-loop: garante que o redirect interativo de login dispare NO MÁXIMO uma vez
+// por sessão de aba. Se o usuário voltar do Entra sem conta utilizável (raro), a app
+// renderiza em demo em vez de entrar em loop de redirect.
+const REDIRECT_FLAG = "ts-auth-redirect";
+
+/** Inicializa a MSAL, resolve o retorno de um eventual redirect e GARANTE a sessão:
+ *  1) usa a conta em cache/retorno de redirect, se houver;
+ *  2) senão tenta SSO silencioso reaproveitando a sessão do Entra do navegador;
+ *  3) senão dispara um redirect ÚNICO para o login (SSO) — é o que faltava para "logar
+ *     automático / cair no SSO". Idempotente. No-op quando auth está desligado (preview). */
 export async function initAuth(): Promise<void> {
   if (!authEnabled) return;
   if (!initPromise) {
     initPromise = (async () => {
       const app = instance();
       await app.initialize();
-      const res = await app.handleRedirectPromise();
-      const acct = res?.account ?? app.getAllAccounts()[0];
-      if (acct) app.setActiveAccount(acct);
+
+      let acct: AccountInfo | null = null;
+      try {
+        const res = await app.handleRedirectPromise();
+        acct = res?.account ?? app.getAllAccounts()[0] ?? null;
+      } catch {
+        // Falha ao completar o retorno do redirect — segue com o que houver em cache.
+        acct = app.getAllAccounts()[0] ?? null;
+      }
+
+      if (!acct) {
+        // Sem conta: tenta troca SILENCIOSA (zero UI) usando a sessão do Entra já ativa
+        // no navegador corporativo.
+        try {
+          const r = await app.ssoSilent({ scopes: LOGIN_SCOPES });
+          acct = r.account ?? null;
+        } catch {
+          // Silent não foi possível (ex.: iframe bloqueado por cookie de terceiro, ou
+          // nenhuma sessão) → login INTERATIVO via redirect. Qualquer erro aqui cai no
+          // redirect, não só InteractionRequiredAuthError — era essa a causa do "não redireciona".
+          if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
+            sessionStorage.setItem(REDIRECT_FLAG, "1");
+            await app.loginRedirect({ scopes: LOGIN_SCOPES }); // navega para fora
+            return;
+          }
+        }
+      }
+
+      if (acct) {
+        app.setActiveAccount(acct);
+        sessionStorage.removeItem(REDIRECT_FLAG);
+      }
     })();
   }
   return initPromise;
@@ -72,22 +109,19 @@ export async function getAuthToken(): Promise<string | null> {
   await initAuth();
   const app = instance();
   const account = activeAccount();
+  // Sem conta aqui = initAuth já disparou o redirect (ou o guardou). Não bloqueia a UI.
+  if (!account) return null;
   try {
-    let result: AuthenticationResult;
-    if (account) {
-      result = await app.acquireTokenSilent({ scopes: LOGIN_SCOPES, account });
-    } else {
-      // Sem conta em cache: tenta SSO silencioso usando a sessão do navegador (sem UI).
-      result = await app.ssoSilent({ scopes: LOGIN_SCOPES });
-      if (result.account) app.setActiveAccount(result.account);
-    }
+    const result: AuthenticationResult = await app.acquireTokenSilent({
+      scopes: LOGIN_SCOPES,
+      account,
+    });
     return result.idToken ?? null;
   } catch (e) {
     if (e instanceof InteractionRequiredAuthError) {
-      // Sessão não reaproveitável (ex.: nunca logou neste browser) → redirect único.
-      await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account: account ?? undefined });
-      // acquireTokenRedirect navega para fora; o retorno abaixo não chega a ser usado.
-      return null;
+      // Token expirado e sem renovação silenciosa → redirect único para reautenticar.
+      await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
+      return null; // navega para fora; retorno não chega a ser usado
     }
     throw e;
   }
