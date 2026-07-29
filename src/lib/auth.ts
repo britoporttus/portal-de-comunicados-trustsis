@@ -24,6 +24,29 @@ export const authEnabled = Boolean(clientId && tenantId);
 // (aud = clientId, iss = tenant) é o que enviamos ao backend como Bearer.
 const LOGIN_SCOPES = ["openid", "profile", "email", "User.Read"];
 
+// tenantId configurado como GUID = tenant ESPECÍFICO (single-tenant). Nesse caso
+// filtramos o cache da MSAL para o tenant correto: se o usuário tem 2 contas
+// corporativas (ex.: TrustSis + Porttus), o cache pode conter a conta do OUTRO
+// tenant e getAllAccounts()[0] acabava escolhendo a errada (@porttus.com).
+function isSpecificTenant(t: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t);
+}
+
+/** Contas do cache que pertencem ao tenant configurado (fallback: todas). */
+function accountsForTenant(app: PublicClientApplication): AccountInfo[] {
+  const all = app.getAllAccounts();
+  if (!isSpecificTenant(tenantId)) return all;
+  const doTenant = all.filter((a) => a.tenantId?.toLowerCase() === tenantId.toLowerCase());
+  return doTenant.length ? doTenant : all;
+}
+
+/** Uma conta é aceitável se o tenant não é específico OU ela é do tenant certo. */
+function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
+  if (!a) return false;
+  if (!isSpecificTenant(tenantId)) return true;
+  return a.tenantId?.toLowerCase() === tenantId.toLowerCase();
+}
+
 let pca: PublicClientApplication | null = null;
 let initPromise: Promise<void> | null = null;
 
@@ -67,12 +90,15 @@ export async function initAuth(): Promise<void> {
       await app.initialize();
 
       // 1) Retorno de redirect (ou conta em cache/localStorage de uma visita anterior).
+      //    SEMPRE preferindo a conta do tenant configurado (evita a conta do outro
+      //    tenant corporativo — ex.: @porttus.com — quando o usuário tem 2 contas).
       let acct: AccountInfo | null = null;
       try {
         const res = await app.handleRedirectPromise();
-        acct = res?.account ?? app.getAllAccounts()[0] ?? null;
+        const doRedirect = isAllowedTenant(res?.account) ? res!.account : null;
+        acct = doRedirect ?? accountsForTenant(app)[0] ?? null;
       } catch {
-        acct = app.getAllAccounts()[0] ?? null;
+        acct = accountsForTenant(app)[0] ?? null;
       }
 
       if (acct) {
@@ -81,10 +107,13 @@ export async function initAuth(): Promise<void> {
         return;
       }
 
-      // 2) Sem conta → login interativo por redirect (uma única vez por sessão de aba).
+      // 2) Sem conta utilizável → login interativo por redirect (uma vez por aba).
+      //    `prompt: "select_account"` força o Entra a MOSTRAR o seletor de contas em
+      //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
+      //    — assim o usuário escolhe a conta TrustSis explicitamente.
       if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
         sessionStorage.setItem(REDIRECT_FLAG, "1");
-        await app.loginRedirect({ scopes: LOGIN_SCOPES }); // navega para fora
+        await app.loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" }); // navega para fora
       }
     })();
   }
@@ -93,7 +122,9 @@ export async function initAuth(): Promise<void> {
 
 function activeAccount(): AccountInfo | null {
   const app = instance();
-  return app.getActiveAccount() ?? app.getAllAccounts()[0] ?? null;
+  const active = app.getActiveAccount();
+  if (isAllowedTenant(active)) return active;
+  return accountsForTenant(app)[0] ?? active ?? null;
 }
 
 /** Devolve um idToken válido do usuário logado, de forma SILENCIOSA sempre que possível.

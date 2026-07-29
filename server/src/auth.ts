@@ -15,6 +15,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { config } from "./config.js";
+import { resolveDirectoryKey } from "./graph.js";
 
 export const authRequired = process.env.AUTH_REQUIRED === "true";
 
@@ -24,16 +25,30 @@ const jwks = authRequired && tenant
   ? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys`))
   : null;
 
-/** Extrai o UPN validado do token, ou lança. */
-async function upnFromToken(token: string): Promise<string> {
+export interface TokenIdentity {
+  oid?: string;
+  upn?: string;
+  email?: string;
+}
+
+/** Extrai a IDENTIDADE validada do token (oid + upn + email).
+ *  MOTIVO (bug real em prod): o login corporativo pode ser um GUEST de domínio irmão
+ *  (ex.: joao.brito@porttus.com, objeto B2B #EXT# SEM mailbox neste tenant) enquanto os
+ *  dados reais (perfil/agenda/organograma) vivem no MEMBER equivalente joao.brito@trustsis.com.
+ *  `GET /users/{upn-guest}` dá 404 e o backend caía no fallback demo (dados FICTÍCIOS).
+ *  Quem resolve o objeto certo é `resolveDirectoryKey` (graph.ts), que remapeia o domínio-alias
+ *  para o member e, na falta, usa o oid (imutável, sempre resolvível). */
+async function identityFromToken(token: string): Promise<TokenIdentity> {
   const { payload } = await jwtVerify(token, jwks!, {
     issuer,
     audience: config.entra.clientId,
   });
   if (payload.tid !== tenant) throw new Error("tenant inválido");
-  const upn = (payload.preferred_username ?? payload.upn ?? payload.email) as string | undefined;
-  if (!upn) throw new Error("token sem UPN");
-  return upn;
+  const oid = payload.oid as string | undefined;
+  const upn = (payload.preferred_username ?? payload.upn) as string | undefined;
+  const email = payload.email as string | undefined;
+  if (!oid && !upn && !email) throw new Error("token sem identidade (oid/upn/email)");
+  return { oid, upn, email };
 }
 
 /** Middleware de barreira. Aplicado às rotas /api (exceto /api/health). */
@@ -47,10 +62,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   try {
-    const upn = await upnFromToken(token);
-    // Injeta o UPN validado onde os handlers já leem (?upn=), de forma transparente:
-    // /me, /agenda, /org e /links passam a operar sobre o usuário REAL logado.
-    (req.query as Record<string, unknown>).upn = upn;
+    const id = await identityFromToken(token);
+    // Resolve a chave de diretório correta (member @trustsis.com quando o login é um guest
+    // de domínio-alias; senão o oid) e injeta onde os handlers já leem (?upn=), de forma
+    // transparente: /me, /agenda, /org e /links passam a operar sobre o usuário REAL logado.
+    const key = await resolveDirectoryKey(id);
+    (req.query as Record<string, unknown>).upn = key;
     next();
   } catch (e) {
     res.status(401).json({ error: "token inválido", detail: (e as Error).message });

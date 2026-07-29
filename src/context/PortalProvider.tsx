@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/types";
+import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 
 type Theme = "light" | "dark";
 
@@ -13,6 +14,8 @@ interface PortalState {
   setVerComoUsuario: (v: boolean) => void;
   theme: Theme;
   toggleTheme: () => void;
+  background: string; // id do papel de parede escolhido (ver lib/backgrounds)
+  setBackground: (id: string) => void;
 }
 
 const Ctx = createContext<PortalState | null>(null);
@@ -29,11 +32,19 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem("ts-theme") as Theme) || "dark",
   );
+  const [background, setBackgroundState] = useState<string>(
+    () => localStorage.getItem("ts-bg") || DEFAULT_BACKGROUND,
+  );
 
   useEffect(() => {
     applyTheme(theme);
     localStorage.setItem("ts-theme", theme);
   }, [theme]);
+
+  const setBackground = useCallback((id: string) => {
+    setBackgroundState(id);
+    localStorage.setItem("ts-bg", id);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -60,7 +71,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme }}
+      value={{ me, loading, mode, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground }}
     >
       {children}
     </Ctx.Provider>

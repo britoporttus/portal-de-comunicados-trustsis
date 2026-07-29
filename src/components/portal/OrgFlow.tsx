@@ -68,8 +68,9 @@ function PersonNode({
       {temTime && (
         <button
           onClick={() => data.onToggle(p.id)}
+          onPointerDown={(e) => e.stopPropagation()}
           aria-label={data.expanded ? "Recolher time" : "Expandir time"}
-          className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-secondary px-1.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+          className="nodrag nopan flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-border bg-secondary px-1.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
         >
           {data.expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
           <Users className="size-3" /> {data.count}
@@ -176,7 +177,7 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
   const totalPessoas = byId.size;
 
   return (
-    <div className="h-[620px] w-full overflow-hidden rounded-2xl border border-border bg-secondary/30">
+    <div className="h-[70vh] max-h-[680px] min-h-[440px] w-full overflow-hidden rounded-2xl border border-border bg-secondary/30">
       <ReactFlow
         nodes={nodes}
         edges={edges}

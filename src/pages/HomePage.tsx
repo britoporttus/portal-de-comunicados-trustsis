@@ -12,7 +12,6 @@ import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePortal } from "@/context/PortalProvider";
-import hero from "@/assets/hero.png";
 
 function Painel({
   title, icon: Icon, to, children,
@@ -56,13 +55,7 @@ export default function HomePage() {
   const links = useAsync(() => api.links.list(me?.email), [me?.email]);
 
   return (
-    <div className="relative isolate space-y-6">
-      {/* Imagem de fundo cobrindo toda a página inicial */}
-      <div className="pointer-events-none absolute -inset-x-4 -inset-y-6 -z-10 overflow-hidden lg:-inset-x-8 lg:-inset-y-8">
-        <img src={hero} alt="" className="h-full w-full object-cover opacity-[0.10]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
-      </div>
-
+    <div className="space-y-6">
       {/* Acesso rápido */}
       <section>
         <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
@@ -143,7 +136,7 @@ export default function HomePage() {
             <LinhaVazia texto="Sem compromissos próximos." />
           ) : (
             <ul className="space-y-3">
-              {(agenda.data ?? []).slice(0, 5).map((a) => (
+              {(agenda.data ?? []).slice(0, 3).map((a) => (
                 <li key={a.id} className="flex gap-3">
                   <div className="flex w-14 shrink-0 flex-col items-center rounded-lg bg-secondary py-1.5 text-center">
                     <span className="text-[10px] uppercase text-muted-foreground">{diaSemana(a.inicio).slice(0, 3)}</span>

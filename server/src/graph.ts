@@ -151,6 +151,58 @@ async function fetchPhotoDataUrl(idOrUpn: string): Promise<string | undefined> {
 
 export const isGraphOn = graphEnabled;
 
+// Domínios IRMÃOS: um login de GUEST @porttus.com corresponde ao MEMBER equivalente
+// @trustsis.com (MESMA pessoa — porttus é a holding; o tenant trustsis é onde ficam
+// mailbox/agenda/organograma). Restrito a domínios EXPLÍCITOS de confiança para não
+// mapear guests aleatórios por coincidência de local-part (evita vazamento de dados).
+const DOMAIN_ALIASES: Record<string, string> = { "porttus.com": "trustsis.com" };
+
+// Cache de resolução (identidade do token -> chave de diretório). Evita reconsultar o
+// Graph a cada request; a 1ª chamada por usuário/processo faz o lookup, as demais servem do cache.
+const dirKeyCache = new Map<string, string>();
+
+/** Confirma que um UPN/e-mail resolve em /users e devolve a própria chave (ou null). */
+async function userResolves(key: string): Promise<string | null> {
+  try {
+    const u = await graphGet<{ id?: string }>(`/users/${encodeURIComponent(key)}?$select=id`);
+    return u?.id ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a MELHOR chave de diretório para o usuário logado:
+ *  1) se o login for de um domínio-alias (guest @porttus.com), tenta o member equivalente
+ *     no domínio-alvo (@trustsis.com) — é onde estão os dados reais;
+ *  2) senão (ou se o member não existir), usa o `oid` (imutável, sempre resolvível).
+ *  Sem Graph (preview/demo) a barreira nem chama isto. */
+export async function resolveDirectoryKey(id: {
+  oid?: string;
+  upn?: string;
+  email?: string;
+}): Promise<string> {
+  const cacheKey = id.oid || id.upn || id.email || "";
+  const cached = dirKeyCache.get(cacheKey);
+  if (cached) return cached;
+
+  let resolved = id.oid || id.upn || id.email || "";
+  if (graphEnabled) {
+    for (const s of [id.upn, id.email]) {
+      if (!s || !s.includes("@")) continue;
+      const [local, domain] = s.toLowerCase().split("@");
+      const alvo = DOMAIN_ALIASES[domain];
+      if (!alvo || !local) continue;
+      const hit = await userResolves(`${local}@${alvo}`);
+      if (hit) {
+        resolved = hit;
+        break;
+      }
+    }
+  }
+  if (cacheKey) dirKeyCache.set(cacheKey, resolved);
+  return resolved;
+}
+
 /** Perfil do colaborador atual (DEMO_USER_UPN em modo app-only, ou o UPN passado). */
 export async function getProfile(upn?: string): Promise<Pessoa & { isAdmin: boolean }> {
   const target = upn || config.entra.demoUserUpn;

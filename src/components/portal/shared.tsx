@@ -1,5 +1,6 @@
 // Componentes/utilitários visuais compartilhados do portal.
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Mail, Users, Cloud, Folder, LayoutGrid, LifeBuoy, Link2, Globe, Calendar,
   Video, MapPin, type LucideIcon,
@@ -75,15 +76,20 @@ export function LinkIcon({
   );
 }
 
-export function Brand() {
+export function Brand({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <div className="flex items-center">
+    <Link
+      to="/"
+      onClick={onNavigate}
+      aria-label="Página inicial"
+      className="flex items-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <img
         src={logo}
         alt="TrustSis"
         className="h-11 w-auto rounded-lg bg-white/95 px-2.5 py-1.5 shadow-sm"
       />
-    </div>
+    </Link>
   );
 }
 
