@@ -10,7 +10,6 @@
 // logado no tenant. Só cai para redirect (uma única vez) quando não há sessão utilizável.
 import {
   PublicClientApplication,
-  InteractionRequiredAuthError,
   type AuthenticationResult,
   type AccountInfo,
 } from "@azure/msal-browser";
@@ -49,10 +48,17 @@ function instance(): PublicClientApplication {
 const REDIRECT_FLAG = "ts-auth-redirect";
 
 /** Inicializa a MSAL, resolve o retorno de um eventual redirect e GARANTE a sessão:
- *  1) usa a conta em cache/retorno de redirect, se houver;
- *  2) senão tenta SSO silencioso reaproveitando a sessão do Entra do navegador;
- *  3) senão dispara um redirect ÚNICO para o login (SSO) — é o que faltava para "logar
- *     automático / cair no SSO". Idempotente. No-op quando auth está desligado (preview). */
+ *  1) resolve o retorno de um redirect (ou usa a conta em cache), se houver;
+ *  2) SEM conta → login por REDIRECT ÚNICO (SSO). Com a sessão do Entra já ativa no
+ *     Edge corporativo, o bounce por login.microsoftonline.com é TRANSPARENTE (sem tela
+ *     de senha) e volta com token. No-op quando auth está desligado (preview).
+ *
+ *  Por que NÃO usa mais `ssoSilent`: sem `loginHint`, o silent abre um IFRAME que:
+ *  (a) leva AADSTS50058 (a sessão do navegador não vai no iframe), e (b) recarrega o
+ *  app inteiro no iframe (redirectUri = origin) → `block_iframe_reload`, que suja o
+ *  estado `interaction_in_progress` da MSAL e IMPEDE o `loginRedirect` seguinte de
+ *  navegar. Resultado: ficava preso em "Modo demo". O redirect direto é o que o usuário
+ *  quer (cair no SSO) e é o fluxo robusto. */
 export async function initAuth(): Promise<void> {
   if (!authEnabled) return;
   if (!initPromise) {
@@ -60,36 +66,25 @@ export async function initAuth(): Promise<void> {
       const app = instance();
       await app.initialize();
 
+      // 1) Retorno de redirect (ou conta em cache/localStorage de uma visita anterior).
       let acct: AccountInfo | null = null;
       try {
         const res = await app.handleRedirectPromise();
         acct = res?.account ?? app.getAllAccounts()[0] ?? null;
       } catch {
-        // Falha ao completar o retorno do redirect — segue com o que houver em cache.
         acct = app.getAllAccounts()[0] ?? null;
-      }
-
-      if (!acct) {
-        // Sem conta: tenta troca SILENCIOSA (zero UI) usando a sessão do Entra já ativa
-        // no navegador corporativo.
-        try {
-          const r = await app.ssoSilent({ scopes: LOGIN_SCOPES });
-          acct = r.account ?? null;
-        } catch {
-          // Silent não foi possível (ex.: iframe bloqueado por cookie de terceiro, ou
-          // nenhuma sessão) → login INTERATIVO via redirect. Qualquer erro aqui cai no
-          // redirect, não só InteractionRequiredAuthError — era essa a causa do "não redireciona".
-          if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
-            sessionStorage.setItem(REDIRECT_FLAG, "1");
-            await app.loginRedirect({ scopes: LOGIN_SCOPES }); // navega para fora
-            return;
-          }
-        }
       }
 
       if (acct) {
         app.setActiveAccount(acct);
         sessionStorage.removeItem(REDIRECT_FLAG);
+        return;
+      }
+
+      // 2) Sem conta → login interativo por redirect (uma única vez por sessão de aba).
+      if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
+        sessionStorage.setItem(REDIRECT_FLAG, "1");
+        await app.loginRedirect({ scopes: LOGIN_SCOPES }); // navega para fora
       }
     })();
   }
@@ -117,13 +112,16 @@ export async function getAuthToken(): Promise<string | null> {
       account,
     });
     return result.idToken ?? null;
-  } catch (e) {
-    if (e instanceof InteractionRequiredAuthError) {
-      // Token expirado e sem renovação silenciosa → redirect único para reautenticar.
+  } catch {
+    // QUALQUER falha do silent (token expirado, iframe de renovação bloqueado por
+    // cookie de terceiro / block_iframe_reload, etc.) → reautenticar por redirect
+    // ÚNICO. Nunca condicionar a `instanceof InteractionRequiredAuthError`: no
+    // fluxo silent-first o erro real quase nunca é esse tipo exato.
+    if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
+      sessionStorage.setItem(REDIRECT_FLAG, "1");
       await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
-      return null; // navega para fora; retorno não chega a ser usado
     }
-    throw e;
+    return null; // navega para fora; retorno não chega a ser usado
   }
 }
 
