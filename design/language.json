@@ -1,0 +1,17 @@
+{
+  "vibe": "Portal corporativo interno, escuro e sóbrio — um 'console' navy com um único acento ciano. Sensação big-tech/enterprise: organizado, calmo e focado em conteúdo (comunicados, agenda, pessoas, links), sem ornamento nem ruído visual.",
+  "shape": "Cantos consistentemente arredondados: cards e painéis com raio generoso (~14–20px), tiles de acesso rápido em quadrados arredondados, badges totalmente pill, botões e itens de navegação com cantos suaves. Nada de quinas vivas.",
+  "elevation": "Elevação sutil, quase plana. Sobre o fundo navy os cards se destacam por um preenchimento levemente mais claro + borda hairline de 1px — não por sombra pesada. O realce forte é pontual, via glow/borda ciano em um único elemento (ex.: card 'Próxima reunião').",
+  "typography": "Inter (sans). Hierarquia forte e limpa: saudação em título grande, semibold, com tracking apertado; rótulos de seção em negrito ('Acesso rápido', 'Comunicados recentes'); eyebrows e labels de dia em MAIÚSCULAS pequenas com tracking largo ('PRÓXIMA REUNIÃO', 'QUI/SEX/SEG'). Texto secundário (datas, descrições, cargo) em cinza-azulado mutado, criando bom contraste de peso.",
+  "color": "Base monocromática navy (fundo ~#0a1533, cards ~#101f4d) com UMA primária ciano (#00abd6) usada como SINAL, com parcimônia: item de nav ativo, ícones de linha, links ('Ver todos'), CTA único ('Ver no calendário') e destaques. Cores de status aparecem só em badges de categoria (verde=Férias/sucesso, ciano/azul=Interno/Feriado). O acento nunca inunda a tela — é reservado a estado e ação.",
+  "motion": "Discreto e utilitário (não observável em estático; os tokens de fundação preveem transições suaves — fades e pequenos rises com ease-out, sem bounce). Movimento serve à leitura, não ao espetáculo.",
+  "rules": [
+    "Use o ciano só como SINAL (item ativo, link, ícone, 1 CTA) — nunca como preenchimento de área grande.",
+    "Estrutura sempre em neutros navy; reserve as cores de status apenas para badges/rótulos.",
+    "Mantenha cantos arredondados e bordas hairline de 1px; evite sombras pesadas — diferencie superfícies pelo tom de preenchimento.",
+    "Títulos em semibold com tracking tight; eyebrows e labels em MAIÚSCULAS pequenas com tracking largo.",
+    "Ícones de linha finos (lucide), tamanho e peso uniformes, tingidos de ciano quando ativos.",
+    "Densidade editorial: respiro generoso, layout em cards, uma coluna principal + coluna lateral — não empilhe tudo denso.",
+    "Um único elemento de destaque por tela (o card com borda/glow ciano) — não repita o realce forte."
+  ]
+}
