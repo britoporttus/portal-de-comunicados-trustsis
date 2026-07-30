@@ -37,3 +37,4 @@ coverage
 # dados de runtime do store JSON
 server/data/
 .hive-ref.png
+.env.bak

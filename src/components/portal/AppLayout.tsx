@@ -105,12 +105,15 @@ export default function AppLayout() {
   }, [collapsed]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Papel de parede global (atrás de tudo; sidebar/topbar são opacos e o cobrem) */}
+    <div className={cn("relative isolate flex h-screen overflow-hidden", bg.id === "none" && "bg-background")}>
+      {/* Papel de parede global. A raiz cria um stacking context (isolate) e fica transparente
+          quando há fundo, para a camada -z-10 ficar ATRÁS do conteúdo mas À FRENTE da raiz
+          (senão o bg-background opaco da raiz/body a cobriria e ela não apareceria). */}
       {bg.id !== "none" && (
-        <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden>
+        <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
           <div className="absolute inset-0" style={bg.style} />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/75 via-background/88 to-background" />
+          {/* Overlay leve: escurece só o suficiente pra legibilidade, deixando a paisagem aparecer. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-background/45 via-background/55 to-background/80" />
         </div>
       )}
 

@@ -1,5 +1,6 @@
-// Fundos personalizáveis do portal (estilo "nova guia do Edge"). São gradientes/meshes
-// definidos em CSS — funcionam offline, adaptam-se ao tema e não dependem de rede.
+// Fundos personalizáveis do portal (estilo "nova guia do Edge" / Windows Spotlight).
+// São FOTOS de paisagem (Unsplash) — coloridas e marcantes — com uma cor sólida de
+// fallback (aparece na hora, antes da foto carregar ou se a rede falhar).
 // O usuário escolhe pelo seletor no topo; a preferência fica no localStorage (ver PortalProvider).
 import type { CSSProperties } from "react";
 import hero from "@/assets/hero.png";
@@ -9,60 +10,52 @@ export interface BackgroundOption {
   label: string;
   /** Estilo aplicado à camada de fundo (fica atrás do conteúdo, com overlay p/ legibilidade). */
   style: CSSProperties;
-  /** Miniatura do seletor (mesma "cara" do fundo, em pequeno). */
+  /** Miniatura do seletor (mesma "cara" do fundo, em pequeno e mais leve). */
   swatch: CSSProperties;
 }
 
-// Cada mesh usa vários radial-gradients sobrepostos — dá a sensação de papel de parede.
-const aurora: CSSProperties = {
-  backgroundColor: "#0b1220",
-  backgroundImage:
-    "radial-gradient(60% 60% at 15% 15%, hsl(199 89% 48% / 0.55), transparent 60%)," +
-    "radial-gradient(55% 55% at 85% 20%, hsl(160 84% 39% / 0.45), transparent 60%)," +
-    "radial-gradient(65% 65% at 70% 90%, hsl(262 83% 58% / 0.45), transparent 60%)",
-};
-const oceano: CSSProperties = {
-  backgroundColor: "#06263a",
-  backgroundImage:
-    "radial-gradient(70% 60% at 20% 10%, hsl(199 89% 55% / 0.6), transparent 65%)," +
-    "radial-gradient(60% 60% at 90% 80%, hsl(210 90% 40% / 0.55), transparent 65%)",
-};
-const entardecer: CSSProperties = {
-  backgroundColor: "#2a0f24",
-  backgroundImage:
-    "radial-gradient(60% 60% at 10% 20%, hsl(20 90% 55% / 0.55), transparent 62%)," +
-    "radial-gradient(60% 60% at 85% 15%, hsl(340 82% 58% / 0.5), transparent 62%)," +
-    "radial-gradient(70% 70% at 60% 95%, hsl(275 70% 45% / 0.5), transparent 62%)",
-};
-const floresta: CSSProperties = {
-  backgroundColor: "#08221a",
-  backgroundImage:
-    "radial-gradient(65% 60% at 15% 15%, hsl(150 70% 45% / 0.55), transparent 62%)," +
-    "radial-gradient(60% 60% at 90% 85%, hsl(180 65% 40% / 0.5), transparent 62%)",
-};
-const grafite: CSSProperties = {
-  backgroundColor: "#0e1116",
-  backgroundImage:
-    "radial-gradient(80% 80% at 50% 0%, hsl(220 15% 30% / 0.7), transparent 70%)," +
-    "linear-gradient(180deg, hsl(220 14% 14%), hsl(220 16% 8%))",
-};
+// Monta uma opção de foto: cor sólida de fallback + imagem em "cover".
+// A miniatura pede uma versão pequena (w=240) pra o seletor abrir instantâneo.
+function photo(id: string, label: string, url: string, fallback: string): BackgroundOption {
+  const full = `${url}?auto=format&fit=crop&w=1920&q=80`;
+  const thumb = `${url}?auto=format&fit=crop&w=240&h=160&q=60`;
+  return {
+    id,
+    label,
+    style: {
+      backgroundColor: fallback,
+      backgroundImage: `url("${full}")`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    },
+    swatch: {
+      backgroundColor: fallback,
+      backgroundImage: `url("${thumb}")`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    },
+  };
+}
 
 export const BACKGROUNDS: BackgroundOption[] = [
-  { id: "aurora", label: "Aurora", style: aurora, swatch: aurora },
-  { id: "oceano", label: "Oceano", style: oceano, swatch: oceano },
-  { id: "entardecer", label: "Entardecer", style: entardecer, swatch: entardecer },
-  { id: "floresta", label: "Floresta", style: floresta, swatch: floresta },
-  { id: "grafite", label: "Grafite", style: grafite, swatch: grafite },
+  photo("montanha", "Montanha", "https://images.unsplash.com/photo-1754875177745-b09fcb123125", "#8a9096"),
+  photo("praia", "Praia", "https://images.unsplash.com/photo-1771002382315-9be24abde4e4", "#17a697"),
+  photo("lago", "Lago", "https://images.unsplash.com/photo-1493246507139-91e8fad9978e", "#4b5a63"),
+  photo("floresta", "Floresta", "https://images.unsplash.com/photo-1747555843535-76ee0af74b62", "#5f7075"),
+  photo("aurora", "Aurora Boreal", "https://images.unsplash.com/photo-1749033133028-7fb64bd38e07", "#1f3b3a"),
+  photo("deserto", "Deserto", "https://images.unsplash.com/photo-1760721459088-1a70d26b8ad1", "#8a5a34"),
+  photo("flores", "Flores", "https://images.unsplash.com/photo-1758940886501-2eec948ca2c4", "#7c8a63"),
+  photo("cidade", "Cidade", "https://images.unsplash.com/photo-1694057441996-5325f274c1c0", "#21373b"),
   {
     id: "trustsis",
     label: "TrustSis",
-    style: { backgroundImage: `url(${hero})`, backgroundSize: "cover", backgroundPosition: "center" },
-    swatch: { backgroundImage: `url(${hero})`, backgroundSize: "cover", backgroundPosition: "center" },
+    style: { backgroundColor: "#0b1220", backgroundImage: `url(${hero})`, backgroundSize: "cover", backgroundPosition: "center" },
+    swatch: { backgroundColor: "#0b1220", backgroundImage: `url(${hero})`, backgroundSize: "cover", backgroundPosition: "center" },
   },
   { id: "none", label: "Nenhum", style: {}, swatch: { backgroundColor: "hsl(var(--background))" } },
 ];
 
-export const DEFAULT_BACKGROUND = "aurora";
+export const DEFAULT_BACKGROUND = "montanha";
 
 export function getBackground(id: string): BackgroundOption {
   return BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0];
