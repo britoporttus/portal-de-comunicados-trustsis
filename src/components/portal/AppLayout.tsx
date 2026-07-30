@@ -15,6 +15,7 @@ import { getBackground } from "@/lib/backgrounds";
 import { NAV } from "./nav";
 import { Brand } from "./shared";
 import { BackgroundPicker } from "./BackgroundPicker";
+import { ThemePicker } from "./ThemePicker";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
@@ -162,6 +163,7 @@ export default function AppLayout() {
                 <Switch checked={verComoUsuario} onCheckedChange={setVerComoUsuario} />
               </label>
             )}
+            <ThemePicker />
             <BackgroundPicker />
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Alternar tema">
               {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}

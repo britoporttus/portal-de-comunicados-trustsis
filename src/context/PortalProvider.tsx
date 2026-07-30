@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { api } from "@/lib/api";
 import type { Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
+import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
 
 type Theme = "light" | "dark";
 
@@ -16,6 +17,8 @@ interface PortalState {
   toggleTheme: () => void;
   background: string; // id do papel de parede escolhido (ver lib/backgrounds)
   setBackground: (id: string) => void;
+  colorTheme: string; // id do tema de cor escolhido (ver lib/themes)
+  setColorTheme: (id: string) => void;
 }
 
 const Ctx = createContext<PortalState | null>(null);
@@ -35,15 +38,29 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [background, setBackgroundState] = useState<string>(
     () => localStorage.getItem("ts-bg") || DEFAULT_BACKGROUND,
   );
+  const [colorTheme, setColorThemeState] = useState<string>(
+    () => localStorage.getItem("ts-color") || DEFAULT_COLOR_THEME,
+  );
 
   useEffect(() => {
     applyTheme(theme);
     localStorage.setItem("ts-theme", theme);
   }, [theme]);
 
+  // Aplica a paleta do tema de cor sempre que o tema OU o modo (light/dark) mudar.
+  useEffect(() => {
+    applyColorTheme(colorTheme, theme);
+    localStorage.setItem("ts-color", colorTheme);
+  }, [colorTheme, theme]);
+
   const setBackground = useCallback((id: string) => {
     setBackgroundState(id);
     localStorage.setItem("ts-bg", id);
+  }, []);
+
+  const setColorTheme = useCallback((id: string) => {
+    setColorThemeState(id);
+    localStorage.setItem("ts-color", id);
   }, []);
 
   useEffect(() => {
@@ -71,7 +88,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground }}
+      value={{ me, loading, mode, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
     >
       {children}
     </Ctx.Provider>
