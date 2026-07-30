@@ -22,8 +22,22 @@ const NODE_W = 220;
 const NODE_H = 56; // altura aproximada do card (usada no cálculo do layout)
 const H_GAP = 26; // espaço horizontal entre subárvores irmãs
 const V_GAP = 76; // espaço vertical entre níveis (modo horizontal)
-const V_INDENT = 46; // indentação da coluna quando os liderados empilham na vertical
-const V_STACK = 16; // espaço vertical entre liderados empilhados
+const V_INDENT = 30; // distância da espinha central até a coluna de liderados (modo vertical)
+const V_HEAD = 40; // folga vertical entre o gestor e o 1º liderado empilhado
+const V_STACK = 14; // espaço vertical entre liderados empilhados
+
+// Handles do React Flow ficam INVISÍVEIS (servem só de âncora pras arestas) — sem eles
+// apareciam "potinhos" coloridos nos cards. Mantemos pointer-events off pra não roubar clique.
+const HANDLE_HIDDEN = {
+  opacity: 0,
+  width: 6,
+  height: 6,
+  minWidth: 0,
+  minHeight: 0,
+  border: "none",
+  background: "transparent",
+  pointerEvents: "none" as const,
+};
 // Acima deste nº de liderados diretos, o time empilha NA VERTICAL (em vez do leque horizontal).
 // Regra ALTA de propósito: só os gestores enormes entram nela — o resto fica horizontal ("massa").
 const MANY = 11;
@@ -43,7 +57,7 @@ function CompanyNode({ data }: NodeProps<{ nome: string }>) {
     <div className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 shadow-sm">
       <Building2 className="size-5 text-primary" />
       <span className="text-sm font-semibold text-foreground">{data.nome}</span>
-      <Handle type="source" position={Position.Bottom} id="bottom" className="!bg-primary" />
+      <Handle type="source" position={Position.Bottom} id="bottom" style={HANDLE_HIDDEN} />
     </div>
   );
 }
@@ -93,8 +107,8 @@ function PersonNode({
     >
       {/* Entrada de cima (modo leque horizontal) e entrada pela ESQUERDA (modo lista vertical,
           onde a aresta desce pela espinha do gestor e entra pela lateral do card). */}
-      <Handle type="target" position={Position.Top} id="top" className="!bg-muted-foreground" />
-      <Handle type="target" position={Position.Left} id="left" className="!bg-muted-foreground" />
+      <Handle type="target" position={Position.Top} id="top" style={HANDLE_HIDDEN} />
+      <Handle type="target" position={Position.Left} id="left" style={HANDLE_HIDDEN} />
       <Avatar className={"size-10 shrink-0 " + (temTime ? "ring-2 ring-primary/30" : "")}>
         {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}
         <AvatarFallback className={temTime ? "bg-primary/20 text-xs font-semibold text-primary" : "bg-secondary text-xs font-semibold text-muted-foreground"}>
@@ -120,16 +134,10 @@ function PersonNode({
           <Users className="size-3" /> {data.count}
         </span>
       )}
-      {/* Saída central (leque horizontal) + saída "espinha" ancorada à esquerda: no modo lista
-          vertical TODAS as arestas partem deste mesmo ponto, formando UMA linha vertical única
-          que ramifica para a direita em cada liderado (conector de organograma indentado). */}
-      <Handle type="source" position={Position.Bottom} id="bottom" className="!bg-muted-foreground" />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="spine"
-        style={{ left: 22, transform: "none", opacity: 0 }}
-      />
+      {/* Saída ÚNICA no meio da base: no leque horizontal ramifica para os topos dos filhos;
+          no modo lista vertical TODAS as arestas partem daqui e descem por UMA espinha central
+          que ramifica para a direita em cada liderado (arestas bem distribuídas, sem emaranhado). */}
+      <Handle type="source" position={Position.Bottom} id="bottom" style={HANDLE_HIDDEN} />
     </div>
   );
 }
@@ -202,9 +210,12 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         return { width: NODE_W, height: NODE_H, cx: x + NODE_W / 2 };
       }
       if (filhos.length > MANY) {
-        // Gestor enorme: empilha os liderados numa coluna indentada logo abaixo dele.
-        const colX = x + V_INDENT;
-        let cy = y + NODE_H + V_STACK;
+        // Gestor enorme: os liderados descem numa COLUNA à direita de uma espinha vertical que
+        // sai do MEIO da base do gestor (handle central). Assim a espinha fica alinhada ao centro
+        // do card e cada liderado ramifica com um cotovelo curto e uniforme (setas bem distribuídas).
+        const spineX = x + NODE_W / 2; // a espinha desce pelo centro do gestor
+        const colX = spineX + V_INDENT; // coluna de liderados logo à direita da espinha
+        let cy = y + NODE_H + V_HEAD;
         let maxChildW = 0;
         for (const f of filhos) {
           const b = layout(f, colX, cy, depth + 1);
@@ -212,7 +223,11 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
           cy += b.height + V_STACK;
         }
         pos.set(p.id, { x, y });
-        return { width: V_INDENT + maxChildW, height: cy - V_STACK - y, cx: x + NODE_W / 2 };
+        return {
+          width: Math.max(NODE_W, colX + maxChildW - x),
+          height: cy - V_STACK - y,
+          cx: spineX,
+        };
       }
       // Leque horizontal — dispõe as subárvores lado a lado e centraliza o pai sobre elas.
       const childY = y + NODE_H + V_GAP;
@@ -274,7 +289,7 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         source: parentId,
         target: p.id,
         type: "smoothstep",
-        sourceHandle: viaSpine ? "spine" : "bottom",
+        sourceHandle: "bottom",
         targetHandle: viaSpine ? "left" : "top",
       });
       // Os liderados DESTE nó empilham na vertical quando ele passa do teto MANY.
