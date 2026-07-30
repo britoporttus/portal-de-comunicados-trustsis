@@ -61,27 +61,25 @@ export default function HomePage() {
       <section>
         <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
         {links.loading ? (
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 lg:grid-cols-12">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 rounded-lg" />
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-28 rounded-lg" />
             ))}
           </div>
         ) : (links.data ?? []).length === 0 ? (
           <LinhaVazia texto="Nenhum atalho cadastrado." />
         ) : (
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 lg:grid-cols-12">
+          <div className="flex flex-wrap gap-2">
             {(links.data ?? []).slice(0, 16).map((l) => (
               <a
                 key={l.id}
                 href={l.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card/80 p-1.5 text-center shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
               >
-                <span className="flex size-6 items-center justify-center rounded-md bg-secondary">
-                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4" />
-                </span>
-                <span className="line-clamp-1 text-[10px] font-medium text-foreground">{l.label}</span>
+                <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
+                <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
               </a>
             ))}
           </div>
@@ -147,13 +145,18 @@ export default function HomePage() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-medium text-foreground">{a.titulo}</h3>
-                    <p className="text-xs text-muted-foreground">{faixaHorario(a.inicio, a.fim)}</p>
-                    {(a.local || a.online) && (
-                      <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                        {a.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
-                        {a.online ? "Online" : a.local}
-                      </p>
-                    )}
+                    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                      <span>{faixaHorario(a.inicio, a.fim)}</span>
+                      {(a.local || a.online) && (
+                        <>
+                          <span className="text-muted-foreground/50">|</span>
+                          <span className="inline-flex items-center gap-1">
+                            {a.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
+                            {a.online ? "Online" : a.local}
+                          </span>
+                        </>
+                      )}
+                    </p>
                   </div>
                 </li>
               ))}

@@ -19,10 +19,10 @@ export function NextMeetingCard() {
   })();
 
   return (
-    <aside className="flex w-full flex-col gap-1 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2.5 shadow-sm backdrop-blur-sm">
+    <aside className="flex w-full flex-col gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 shadow-sm backdrop-blur-sm">
       <div className="flex items-center gap-1.5 text-primary">
-        <CalendarClock className="size-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wide">Próxima reunião</span>
+        <CalendarClock className="size-4" />
+        <span className="text-xs font-semibold uppercase tracking-wide">Próxima reunião</span>
       </div>
 
       {loading ? (
@@ -34,26 +34,28 @@ export function NextMeetingCard() {
         <p className="text-sm text-muted-foreground">Sem reuniões próximas.</p>
       ) : (
         <>
-          <h3 className="line-clamp-1 text-sm font-semibold leading-snug text-foreground">
-            {proxima.titulo}
-          </h3>
-          <p className="flex flex-wrap items-center gap-x-1.5 text-[11px] font-medium text-foreground/80">
-            <span>
-              {diaSemana(proxima.inicio)}, {dataLonga(proxima.inicio).replace(/ de \d{4}$/, "")} ·{" "}
-              {faixaHorario(proxima.inicio, proxima.fim)}
-            </span>
-            {(proxima.local || proxima.online) && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                {proxima.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
-                {proxima.online ? "Online" : proxima.local}
+          <div className="space-y-1">
+            <h3 className="line-clamp-1 text-base font-semibold leading-snug text-foreground">
+              {proxima.titulo}
+            </h3>
+            <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-foreground/80">
+              <span className="capitalize">
+                {diaSemana(proxima.inicio)}, {dataLonga(proxima.inicio).replace(/ de \d{4}$/, "")} ·{" "}
+                {faixaHorario(proxima.inicio, proxima.fim)}
               </span>
-            )}
-          </p>
+              {(proxima.local || proxima.online) && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  {proxima.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
+                  {proxima.online ? "Online" : proxima.local}
+                </span>
+              )}
+            </p>
+          </div>
           <a
             href={OUTLOOK_CAL}
             target="_blank"
             rel="noreferrer"
-            className="mt-0.5 inline-flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            className="inline-flex w-fit items-center justify-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Ver no calendário <ArrowUpRight className="size-3.5" />
           </a>
