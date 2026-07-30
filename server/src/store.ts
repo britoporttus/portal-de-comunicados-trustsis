@@ -2,13 +2,19 @@
 // (comunicados, eventos, aniversariantes, links, social). Degrada limpo: se não puder
 // gravar, mantém em memória. Substituível por Postgres (DATABASE_URL) no futuro.
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Store } from "./types.js";
 import { seedData } from "./seed.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "data");
+// Diretório dos dados de runtime. Em produção, defina PORTAL_DATA_DIR para um
+// caminho FORA da pasta do app (ex.: /home/jbrito/portal-data) — assim o store
+// NUNCA é sobrescrito por um deploy (o tarball toca só o código, não os dados).
+// Sem a env, cai no padrão server/data (dev/preview).
+const DATA_DIR = process.env.PORTAL_DATA_DIR
+  ? resolve(process.env.PORTAL_DATA_DIR)
+  : join(__dirname, "..", "data");
 const DATA_FILE = join(DATA_DIR, "store.json");
 
 let cache: Store | null = null;
