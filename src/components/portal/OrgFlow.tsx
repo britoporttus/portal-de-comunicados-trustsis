@@ -49,9 +49,35 @@ function PersonNode({
   const p = data.pessoa;
   const temTime = data.count > 0;
   const area = p.area?.trim();
+  // Card inteiro é o alvo de toque quando a pessoa tem liderados. O nó do React Flow
+  // fica com `pointer-events: none` (nós não-selecionáveis/arrastáveis) — por isso o card
+  // clicável PRECISA de `pointer-events-auto`, senão o clique cai no canvas e nada expande.
+  // Nós-folha ficam sem pointer-events (deixa o pan do canvas começar em cima deles).
+  const toggle = temTime ? () => data.onToggle(p.id) : undefined;
   return (
     <div
-      className="group flex w-[220px] items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2 shadow-sm"
+      role={temTime ? "button" : undefined}
+      tabIndex={temTime ? 0 : undefined}
+      onClick={toggle}
+      onKeyDown={
+        temTime
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                data.onToggle(p.id);
+              }
+            }
+          : undefined
+      }
+      aria-expanded={temTime ? data.expanded : undefined}
+      aria-label={temTime ? `${p.nome}, ${data.count} liderados — ${data.expanded ? "recolher" : "expandir"} time` : undefined}
+      title={temTime ? (data.expanded ? "Recolher time" : "Expandir time") : undefined}
+      className={
+        "nodrag group flex w-[220px] items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2 shadow-sm transition-shadow " +
+        (temTime
+          ? "pointer-events-auto cursor-pointer ring-primary/0 hover:shadow-md hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "
+          : "")
+      }
       style={area ? { borderLeftColor: `hsl(${hue(area)} 60% 55%)`, borderLeftWidth: 3 } : undefined}
     >
       <Handle type="target" position={Position.Top} className="!bg-muted-foreground" />
@@ -67,15 +93,18 @@ function PersonNode({
         {area && <div className="truncate text-[10px] uppercase tracking-wide text-muted-foreground/80">{area}</div>}
       </div>
       {temTime && (
-        <button
-          onClick={() => data.onToggle(p.id)}
-          onPointerDown={(e) => e.stopPropagation()}
-          aria-label={data.expanded ? "Recolher time" : "Expandir time"}
-          className="nodrag nopan flex shrink-0 cursor-pointer items-center gap-0.5 rounded-md border border-border bg-secondary px-1.5 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        <span
+          aria-hidden
+          className={
+            "flex shrink-0 items-center gap-0.5 rounded-md border px-1.5 py-1 text-[10px] font-medium transition-colors " +
+            (data.expanded
+              ? "border-primary/40 bg-primary/10 text-primary"
+              : "border-border bg-secondary text-muted-foreground group-hover:border-primary/40 group-hover:text-foreground")
+          }
         >
-          {data.expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {data.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           <Users className="size-3" /> {data.count}
-        </button>
+        </span>
       )}
       <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground" />
     </div>
