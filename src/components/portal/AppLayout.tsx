@@ -14,7 +14,6 @@ import { iniciais, saudacao } from "@/lib/format";
 import { getBackground } from "@/lib/backgrounds";
 import { NAV } from "./nav";
 import { Brand } from "./shared";
-import { NextMeetingCard } from "./NextMeetingCard";
 import { BackgroundPicker } from "./BackgroundPicker";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
@@ -212,16 +211,13 @@ function PageGreeting() {
   const { me } = usePortal();
   const primeiro = me?.nome?.split(" ")[0] ?? "colaborador";
   return (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[28px]">
-          {saudacao()}, {primeiro} 👋
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tudo o que você precisa da TrustSis, em um só lugar.
-        </p>
-      </div>
-      <NextMeetingCard />
+    <div className="mb-4">
+      <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[28px]">
+        {saudacao()}, {primeiro} 👋
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Tudo o que você precisa da TrustSis, em um só lugar.
+      </p>
     </div>
   );
 }

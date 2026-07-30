@@ -1,4 +1,4 @@
-// Card compacto "Próxima reunião" exibido no topo direito da Início, ao lado da saudação.
+// Card compacto "Próxima reunião" exibido na coluna direita da Início, logo acima da agenda.
 // Lê a agenda (Graph/calendarView) e destaca o próximo compromisso.
 import { CalendarClock, MapPin, Video, ArrowUpRight } from "lucide-react";
 import { api } from "@/lib/api";
@@ -19,7 +19,7 @@ export function NextMeetingCard() {
   })();
 
   return (
-    <aside className="hidden w-[290px] shrink-0 flex-col gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-3 shadow-sm backdrop-blur-sm md:flex">
+    <aside className="flex w-full flex-col gap-1 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2.5 shadow-sm backdrop-blur-sm">
       <div className="flex items-center gap-1.5 text-primary">
         <CalendarClock className="size-3.5" />
         <span className="text-[11px] font-semibold uppercase tracking-wide">Próxima reunião</span>

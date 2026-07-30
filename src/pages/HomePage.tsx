@@ -9,6 +9,7 @@ import {
   dataLonga, diaSemana, faixaHorario, tempoRelativo, mesAtualNome, iniciais,
 } from "@/lib/format";
 import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
+import { NextMeetingCard } from "@/components/portal/NextMeetingCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePortal } from "@/context/PortalProvider";
@@ -124,8 +125,10 @@ export default function HomePage() {
           </Painel>
         </div>
 
-        {/* Agenda */}
-        <Painel title="Minha agenda" icon={CalendarClock}>
+        {/* Próxima reunião + Agenda */}
+        <div className="space-y-4">
+          <NextMeetingCard />
+          <Painel title="Minha agenda" icon={CalendarClock}>
           {agenda.loading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -156,7 +159,8 @@ export default function HomePage() {
               ))}
             </ul>
           )}
-        </Painel>
+          </Painel>
+        </div>
 
         {/* Próximos eventos */}
         <div className="lg:col-span-2">
