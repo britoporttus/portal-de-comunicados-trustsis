@@ -192,7 +192,7 @@ export default function AppLayout() {
 
         {/* Conteúdo */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl px-4 py-5 sm:py-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-7xl px-4 py-4 sm:py-4 lg:px-8 lg:py-5">
             {mode === "demo" && (
               <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning">
                 <Badge variant="outline" className="border-warning/40 bg-warning/15 text-warning">Modo demo</Badge>

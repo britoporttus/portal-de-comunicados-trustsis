@@ -109,12 +109,10 @@ export function seedData(): Store {
       { id: "ani_5", nome: "Juliana Alves", area: "RH", dia: Math.min(28, now.getDate() + 14), mes: now.getMonth() + 1 },
     ],
     links: [
-      { id: "lnk_1", label: "Outlook", url: "https://outlook.office.com", icon: "mail" },
-      { id: "lnk_2", label: "Teams", url: "https://teams.microsoft.com", icon: "users" },
-      { id: "lnk_3", label: "OneDrive", url: "https://www.office.com/launch/onedrive", icon: "cloud" },
-      { id: "lnk_4", label: "SharePoint", url: "https://www.office.com/launch/sharepoint", icon: "folder" },
-      { id: "lnk_5", label: "App Interno", url: "https://app.trustsis.com.br", icon: "layout-grid" },
-      { id: "lnk_6", label: "Service Desk", url: "https://suporte.trustsis.com.br", icon: "life-buoy" },
+      { id: "lnk_1", label: "Teams", url: "https://teams.microsoft.com", icon: "users" },
+      { id: "lnk_2", label: "Outlook", url: "https://outlook.office.com", icon: "mail" },
+      { id: "lnk_3", label: "SharePoint", url: "https://www.office.com/launch/sharepoint", icon: "folder" },
+      { id: "lnk_4", label: "OneDrive", url: "https://www.office.com/launch/onedrive", icon: "cloud" },
     ],
     social: [
       {
