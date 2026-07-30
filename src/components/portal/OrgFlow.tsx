@@ -1,6 +1,9 @@
 // Organograma interativo (árvore) com reactflow, montado a partir do campo `manager`
 // (managerId) do Entra ID: Empresa → líderes de topo → seus liderados, recursivamente.
 // Cada pessoa com liderados é expansível/recolhível; o canvas é pan/zoom (fitView).
+// Gestores (têm liderados) ganham card tintado de primária; subordinados ficam neutros.
+// Gestor com mais de 5 liderados empilha o time NA VERTICAL (lista indentada) em vez de
+// abrir tudo lado a lado — cresce para baixo e polui menos o fluxo.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background, Controls, Handle, Position,
@@ -14,9 +17,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const NODE_W = 220;
-const H_GAP = 26; // espaço horizontal entre nós irmãos
-const V_GAP = 76; // espaço vertical entre níveis
-const ROW = NODE_W + H_GAP;
+const NODE_H = 56; // altura aproximada do card (usada no cálculo do layout)
+const H_GAP = 26; // espaço horizontal entre subárvores irmãs
+const V_GAP = 76; // espaço vertical entre níveis (modo horizontal)
+const V_INDENT = 46; // indentação da coluna quando os liderados empilham na vertical
+const V_STACK = 16; // espaço vertical entre liderados empilhados
+const MANY = 5; // acima disso, os liderados empilham para baixo em vez de abrir ao lado
 
 const EMPRESA_ID = "__empresa__";
 
@@ -73,17 +79,18 @@ function PersonNode({
       aria-label={temTime ? `${p.nome}, ${data.count} liderados — ${data.expanded ? "recolher" : "expandir"} time` : undefined}
       title={temTime ? (data.expanded ? "Recolher time" : "Expandir time") : undefined}
       className={
-        "nodrag group flex w-[220px] items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2 shadow-sm transition-shadow " +
+        "nodrag group flex w-[220px] items-center gap-2.5 rounded-xl border px-3 py-2 shadow-sm transition-shadow " +
+        // Gestor (tem liderados) = card com TINTA primária; subordinado = card branco neutro.
         (temTime
-          ? "pointer-events-auto cursor-pointer ring-primary/0 hover:shadow-md hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "
-          : "")
+          ? "border-primary/40 bg-primary/[0.07] pointer-events-auto cursor-pointer hover:shadow-md hover:ring-2 hover:ring-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary "
+          : "border-border bg-card ")
       }
       style={area ? { borderLeftColor: `hsl(${hue(area)} 60% 55%)`, borderLeftWidth: 3 } : undefined}
     >
       <Handle type="target" position={Position.Top} className="!bg-muted-foreground" />
-      <Avatar className="size-10 shrink-0">
+      <Avatar className={"size-10 shrink-0 " + (temTime ? "ring-2 ring-primary/30" : "")}>
         {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}
-        <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
+        <AvatarFallback className={temTime ? "bg-primary/20 text-xs font-semibold text-primary" : "bg-secondary text-xs font-semibold text-muted-foreground"}>
           {iniciais(p.nome)}
         </AvatarFallback>
       </Avatar>
@@ -161,32 +168,68 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
     const ns: Node[] = [];
     const es: Edge[] = [];
     const pos = new Map<string, { x: number; y: number }>();
-    let leafCursor = 0;
 
-    // Layout "tidy tree": DFS que posiciona folhas em colunas e centraliza pais sobre filhos.
-    const place = (p: Pessoa, depth: number): number => {
+    const COMPANY_H = 48;
+
+    // Layout por CAIXAS DELIMITADORAS: cada subárvore devolve sua largura/altura e o centro
+    // (cx) do próprio nó, então empacotamos irmãos sem sobreposição. DOIS modos por gestor:
+    //  • até 5 liderados  → leque HORIZONTAL (tidy tree), pai centralizado sobre os filhos;
+    //  • mais de 5        → LISTA VERTICAL empilhada e indentada abaixo do gestor
+    //                       (evita uma linha larguíssima; o fluxo cresce para baixo).
+    type Box = { width: number; height: number; cx: number };
+    const layout = (p: Pessoa, x: number, y: number): Box => {
       const filhos = expanded.has(p.id) ? childrenOf.get(p.id) ?? [] : [];
-      const y = depth * (V_GAP + 56); // 56 ≈ altura do card
       if (filhos.length === 0) {
-        const x = leafCursor * ROW;
-        leafCursor += 1;
         pos.set(p.id, { x, y });
-        return x;
+        return { width: NODE_W, height: NODE_H, cx: x + NODE_W / 2 };
       }
-      const xs = filhos.map((f) => place(f, depth + 1));
-      const x = (xs[0] + xs[xs.length - 1]) / 2;
-      pos.set(p.id, { x, y });
-      return x;
+      if (filhos.length > MANY) {
+        // Empilha os liderados numa coluna indentada logo abaixo do gestor.
+        const colX = x + V_INDENT;
+        let cy = y + NODE_H + V_STACK;
+        let maxChildW = 0;
+        for (const f of filhos) {
+          const b = layout(f, colX, cy);
+          maxChildW = Math.max(maxChildW, b.width);
+          cy += b.height + V_STACK;
+        }
+        pos.set(p.id, { x, y });
+        return { width: V_INDENT + maxChildW, height: cy - V_STACK - y, cx: x + NODE_W / 2 };
+      }
+      // Leque horizontal: dispõe as subárvores lado a lado e centraliza o pai sobre elas.
+      const childY = y + NODE_H + V_GAP;
+      let cursor = x;
+      let maxChildH = 0;
+      const centers: number[] = [];
+      for (const f of filhos) {
+        const b = layout(f, cursor, childY);
+        centers.push(b.cx);
+        maxChildH = Math.max(maxChildH, b.height);
+        cursor += b.width + H_GAP;
+      }
+      const childrenRight = cursor - H_GAP;
+      const cx = (centers[0] + centers[centers.length - 1]) / 2;
+      const nodeX = Math.max(x, cx - NODE_W / 2);
+      pos.set(p.id, { x: nodeX, y });
+      const right = Math.max(childrenRight, nodeX + NODE_W);
+      return { width: right - x, height: NODE_H + V_GAP + maxChildH, cx: nodeX + NODE_W / 2 };
     };
 
-    // Empresa é a raiz (depth 0); as pessoas-raiz começam no depth 1.
-    const rootXs = roots.map((r) => place(r, 1));
-    const empresaX = roots.length ? (rootXs[0] + rootXs[rootXs.length - 1]) / 2 : 0;
+    // Posiciona as raízes lado a lado; a Empresa fica centralizada acima delas.
+    const rootTopY = COMPANY_H + V_GAP;
+    let cursorX = 0;
+    const rootCx: number[] = [];
+    for (const r of roots) {
+      const b = layout(r, cursorX, rootTopY);
+      rootCx.push(b.cx);
+      cursorX += b.width + H_GAP;
+    }
+    const empresaCx = rootCx.length ? (rootCx[0] + rootCx[rootCx.length - 1]) / 2 : 0;
 
     ns.push({
       id: EMPRESA_ID,
       type: "company",
-      position: { x: empresaX, y: 0 },
+      position: { x: empresaCx - 90, y: 0 },
       data: { nome: empresa },
       draggable: false,
       selectable: false,
