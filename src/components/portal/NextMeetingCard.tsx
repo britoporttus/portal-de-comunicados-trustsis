@@ -3,7 +3,7 @@
 import { CalendarClock, MapPin, Video, ArrowUpRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import { dataLonga, diaSemana, faixaHorario } from "@/lib/format";
+import { diaSemana, faixaHorario } from "@/lib/format";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const OUTLOOK_CAL = "https://outlook.office.com/calendar/view/week";
@@ -19,34 +19,34 @@ export function NextMeetingCard() {
   })();
 
   return (
-    <aside className="flex w-full flex-col gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3.5 shadow-sm backdrop-blur-sm">
-      <div className="flex items-center gap-1.5 text-primary">
-        <CalendarClock className="size-4" />
-        <span className="text-xs font-semibold uppercase tracking-wide">Próxima reunião</span>
+    <aside className="w-full rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 shadow-sm backdrop-blur-sm">
+      <div className="mb-1.5 flex items-center gap-1.5 text-primary">
+        <CalendarClock className="size-3.5" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide">Próxima reunião</span>
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-4/5 rounded" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-3.5 w-4/5 rounded" />
           <Skeleton className="h-3 w-3/5 rounded" />
         </div>
       ) : !proxima ? (
-        <p className="text-sm text-muted-foreground">Sem reuniões próximas.</p>
+        <p className="text-xs text-muted-foreground">Sem reuniões próximas.</p>
       ) : (
-        <>
-          <div className="space-y-1">
-            <h3 className="line-clamp-1 text-base font-semibold leading-snug text-foreground">
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-1 text-sm font-semibold leading-snug text-foreground">
               {proxima.titulo}
             </h3>
-            <p className="flex flex-wrap items-center gap-x-1.5 text-xs font-medium text-foreground/80">
-              <span className="capitalize">
-                {diaSemana(proxima.inicio)}, {dataLonga(proxima.inicio).replace(/ de \d{4}$/, "")} ·{" "}
-                {faixaHorario(proxima.inicio, proxima.fim)}
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs font-medium text-foreground/80">
+              <span className="shrink-0 capitalize">
+                {diaSemana(proxima.inicio).slice(0, 3)}, {faixaHorario(proxima.inicio, proxima.fim)}
               </span>
               {(proxima.local || proxima.online) && (
-                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  {proxima.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
-                  {proxima.online ? "Online" : proxima.local}
+                <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
+                  <span className="shrink-0 text-muted-foreground/50">|</span>
+                  {proxima.online ? <Video className="size-3 shrink-0" /> : <MapPin className="size-3 shrink-0" />}
+                  <span className="truncate">{proxima.online ? "Online" : proxima.local}</span>
                 </span>
               )}
             </p>
@@ -55,11 +55,12 @@ export function NextMeetingCard() {
             href={OUTLOOK_CAL}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex w-fit items-center justify-center gap-1 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            title="Ver no calendário"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90"
           >
-            Ver no calendário <ArrowUpRight className="size-3.5" />
+            <ArrowUpRight className="size-4" />
           </a>
-        </>
+        </div>
       )}
     </aside>
   );

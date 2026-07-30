@@ -1,7 +1,7 @@
 // Página inicial (dashboard): acesso rápido + comunicados, agenda, eventos e aniversariantes.
 import { Link } from "react-router-dom";
 import {
-  Megaphone, CalendarDays, Cake, CalendarClock, ArrowRight, MapPin, Video, Pin,
+  Megaphone, CalendarDays, Cake, CalendarClock, ArrowRight, MapPin, Pin,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
@@ -56,41 +56,40 @@ export default function HomePage() {
   const links = useAsync(() => api.links.list(me?.email), [me?.email]);
 
   return (
-    <div className="space-y-6">
-      {/* Acesso rápido */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
-        {links.loading ? (
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-28 rounded-lg" />
-            ))}
-          </div>
-        ) : (links.data ?? []).length === 0 ? (
-          <LinhaVazia texto="Nenhum atalho cadastrado." />
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {(links.data ?? []).slice(0, 16).map((l) => (
-              <a
-                key={l.id}
-                href={l.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
-              >
-                <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
-                <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
-              </a>
-            ))}
-          </div>
-        )}
-      </section>
+    <div className="grid gap-6 lg:grid-cols-3">
+      {/* Coluna principal (esquerda): acesso rápido + comunicados + eventos, empilhados */}
+      <div className="space-y-6 lg:col-span-2">
+        {/* Acesso rápido (limitado à largura desta coluna; quebra pra baixo) */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
+          {links.loading ? (
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-28 rounded-lg" />
+              ))}
+            </div>
+          ) : (links.data ?? []).length === 0 ? (
+            <LinhaVazia texto="Nenhum atalho cadastrado." />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {(links.data ?? []).slice(0, 16).map((l) => (
+                <a
+                  key={l.id}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+                >
+                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
+                  <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
 
-      {/* Grade principal */}
-      <div className="grid gap-6 lg:grid-cols-3">
         {/* Comunicados */}
-        <div className="lg:col-span-2">
-          <Painel title="Comunicados recentes" icon={Megaphone} to="/comunicados">
+        <Painel title="Comunicados recentes" icon={Megaphone} to="/comunicados">
             {comunicados.loading ? (
               <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -120,54 +119,10 @@ export default function HomePage() {
                 ))}
               </ul>
             )}
-          </Painel>
-        </div>
+        </Painel>
 
-        {/* Próxima reunião + Agenda */}
-        <div className="space-y-4">
-          <NextMeetingCard />
-          <Painel title="Minha agenda" icon={CalendarClock}>
-          {agenda.loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 rounded-lg" />
-              ))}
-            </div>
-          ) : (agenda.data ?? []).length === 0 ? (
-            <LinhaVazia texto="Sem compromissos próximos." />
-          ) : (
-            <ul className="space-y-3">
-              {(agenda.data ?? []).slice(0, 3).map((a) => (
-                <li key={a.id} className="flex gap-3">
-                  <div className="flex w-14 shrink-0 flex-col items-center rounded-lg bg-secondary py-1.5 text-center">
-                    <span className="text-[10px] uppercase text-muted-foreground">{diaSemana(a.inicio).slice(0, 3)}</span>
-                    <span className="text-sm font-semibold text-foreground">{faixaHorario(a.inicio).split(":")[0]}h</span>
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-medium text-foreground">{a.titulo}</h3>
-                    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                      <span>{faixaHorario(a.inicio, a.fim)}</span>
-                      {(a.local || a.online) && (
-                        <>
-                          <span className="text-muted-foreground/50">|</span>
-                          <span className="inline-flex items-center gap-1">
-                            {a.online ? <Video className="size-3" /> : <MapPin className="size-3" />}
-                            {a.online ? "Online" : a.local}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          </Painel>
-        </div>
-
-        {/* Próximos eventos */}
-        <div className="lg:col-span-2">
-          <Painel title="Próximos eventos" icon={CalendarDays} to="/eventos">
+        {/* Próximos eventos — grudado logo abaixo de comunicados */}
+        <Painel title="Próximos eventos" icon={CalendarDays} to="/eventos">
             {eventos.loading ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {Array.from({ length: 2 }).map((_, i) => (
@@ -197,8 +152,42 @@ export default function HomePage() {
                 ))}
               </div>
             )}
-          </Painel>
-        </div>
+        </Painel>
+      </div>
+
+      {/* Coluna lateral (direita): próxima reunião + agenda + aniversariantes */}
+      <div className="space-y-4">
+        <NextMeetingCard />
+
+        <Painel title="Minha agenda" icon={CalendarClock}>
+          {agenda.loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-lg" />
+              ))}
+            </div>
+          ) : (agenda.data ?? []).length === 0 ? (
+            <LinhaVazia texto="Sem compromissos próximos." />
+          ) : (
+            <ul className="space-y-3">
+              {(agenda.data ?? []).slice(0, 3).map((a) => (
+                <li key={a.id} className="flex gap-3">
+                  <div className="flex w-14 shrink-0 flex-col items-center rounded-lg bg-secondary py-1.5 text-center">
+                    <span className="text-[10px] uppercase text-muted-foreground">{diaSemana(a.inicio).slice(0, 3)}</span>
+                    <span className="text-sm font-semibold text-foreground">{faixaHorario(a.inicio).split(":")[0]}h</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium text-foreground">{a.titulo}</h3>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {faixaHorario(a.inicio, a.fim)}
+                      {(a.local || a.online) && ` | ${a.online ? "Online" : a.local}`}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Painel>
 
         {/* Aniversariantes */}
         <Painel title={`Aniversariantes de ${mesAtualNome()}`} icon={Cake} to="/aniversariantes">
