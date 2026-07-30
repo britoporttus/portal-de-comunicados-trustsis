@@ -303,14 +303,15 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
 
   const totalPessoas = byId.size;
 
-  // Re-enquadra o canvas sempre que o conjunto de nós muda (expandir/recolher) — sem isto o
-  // reactflow só faz fitView na 1ª carga e a árvore "escapa" do quadro ao expandir no mobile.
+  // Re-enquadra o canvas ao expandir/recolher APENAS no mobile (que começa recolhido e a árvore
+  // "escaparia" do quadro estreito). No desktop NÃO reenquadramos: expandir preserva o pan/zoom
+  // atual — sem o "zoom out pro meio da tela" que incomodava a cada clique.
   const rfRef = useRef<ReactFlowInstance | null>(null);
   useEffect(() => {
-    if (!rfRef.current) return;
+    if (!isMobile || !rfRef.current) return;
     const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 250 }), 60);
     return () => clearTimeout(t);
-  }, [nodes.length]);
+  }, [nodes.length, isMobile]);
 
   return (
     <div className="h-[68vh] max-h-[680px] min-h-[420px] w-full touch-pan-y overflow-hidden rounded-2xl border border-border bg-secondary/30">
