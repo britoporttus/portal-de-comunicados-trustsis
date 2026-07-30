@@ -60,27 +60,27 @@ export default function HomePage() {
       <section>
         <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
         {links.loading ? (
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-lg" />
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 lg:grid-cols-12">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 rounded-lg" />
             ))}
           </div>
         ) : (links.data ?? []).length === 0 ? (
           <LinhaVazia texto="Nenhum atalho cadastrado." />
         ) : (
-          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8 lg:grid-cols-12">
             {(links.data ?? []).slice(0, 16).map((l) => (
               <a
                 key={l.id}
                 href={l.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card/80 p-2.5 text-center shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+                className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card/80 p-1.5 text-center shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
               >
-                <span className="flex size-8 items-center justify-center rounded-lg bg-secondary">
-                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-5" />
+                <span className="flex size-6 items-center justify-center rounded-md bg-secondary">
+                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4" />
                 </span>
-                <span className="line-clamp-1 text-[11px] font-medium text-foreground">{l.label}</span>
+                <span className="line-clamp-1 text-[10px] font-medium text-foreground">{l.label}</span>
               </a>
             ))}
           </div>
@@ -205,7 +205,7 @@ export default function HomePage() {
             <LinhaVazia texto="Nenhum aniversariante este mês." />
           ) : (
             <ul className="space-y-3">
-              {(aniversariantes.data ?? []).slice(0, 6).map((p) => (
+              {(aniversariantes.data ?? []).slice(0, 3).map((p) => (
                 <li key={p.id} className="flex items-center gap-3">
                   <Avatar className="size-9 shrink-0">
                     {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}
