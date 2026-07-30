@@ -2,9 +2,10 @@
 // (managerId) do Entra ID: Empresa → líderes de topo → seus liderados, recursivamente.
 // Cada pessoa com liderados é expansível/recolhível; o canvas é pan/zoom (fitView).
 // Gestores (têm liderados) ganham card tintado de primária; subordinados ficam neutros.
-// LAYOUT POR PROFUNDIDADE: a RAIZ (topo, ex.: Claudio) abre os liderados diretos em LEQUE
-// HORIZONTAL (o visual "massa" da 1ª versão); do 2º nível para baixo, cada gestor empilha
-// seus subordinados NA VERTICAL (lista indentada) — cresce para baixo e polui menos o fluxo.
+// LAYOUT POR CONTAGEM: por PADRÃO todo gestor abre seus liderados em LEQUE HORIZONTAL (o
+// visual "massa" da 1ª versão, em TODOS os níveis). SÓ quando um gestor tem MUITOS liderados
+// (> MANY) o time empilha NA VERTICAL (lista indentada, cresce para baixo) — assim os poucos
+// gestores enormes (Vinicius Rocha, Marcus Vinicius, Claudio Bassa) não quebram o fluxo.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background, Controls, Handle, Position,
@@ -23,6 +24,9 @@ const H_GAP = 26; // espaço horizontal entre subárvores irmãs
 const V_GAP = 76; // espaço vertical entre níveis (modo horizontal)
 const V_INDENT = 46; // indentação da coluna quando os liderados empilham na vertical
 const V_STACK = 16; // espaço vertical entre liderados empilhados
+// Acima deste nº de liderados diretos, o time empilha NA VERTICAL (em vez do leque horizontal).
+// Regra ALTA de propósito: só os gestores enormes entram nela — o resto fica horizontal ("massa").
+const MANY = 11;
 
 const EMPRESA_ID = "__empresa__";
 
@@ -173,11 +177,11 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
 
     // Layout por CAIXAS DELIMITADORAS: cada subárvore devolve sua largura/altura e o centro
     // (cx) do próprio nó, então empacotamos irmãos sem sobreposição. O MODO é decidido pela
-    // PROFUNDIDADE do gestor (depth), não pela contagem de liderados:
-    //  • depth 0 (a RAIZ, ex.: Claudio) → leque HORIZONTAL (tidy tree), pai centralizado
-    //                                      sobre os filhos — o visual da 1ª versão;
-    //  • depth ≥ 1 (gestores abaixo)     → LISTA VERTICAL empilhada e indentada abaixo do
-    //                                      gestor (o fluxo cresce para baixo, sem poluir).
+    // CONTAGEM de liderados diretos do gestor (não pela profundidade):
+    //  • até MANY liderados → leque HORIZONTAL (tidy tree), pai centralizado sobre os filhos —
+    //                         o visual "massa" da 1ª versão, aplicado em TODOS os níveis;
+    //  • acima de MANY      → LISTA VERTICAL empilhada e indentada abaixo do gestor (o fluxo
+    //                         cresce para baixo) — só os gestores enormes entram aqui.
     type Box = { width: number; height: number; cx: number };
     const layout = (p: Pessoa, x: number, y: number, depth: number): Box => {
       const filhos = expanded.has(p.id) ? childrenOf.get(p.id) ?? [] : [];
@@ -185,8 +189,8 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         pos.set(p.id, { x, y });
         return { width: NODE_W, height: NODE_H, cx: x + NODE_W / 2 };
       }
-      if (depth > 0) {
-        // Gestor abaixo da raiz: empilha os liderados numa coluna indentada logo abaixo dele.
+      if (filhos.length > MANY) {
+        // Gestor enorme: empilha os liderados numa coluna indentada logo abaixo dele.
         const colX = x + V_INDENT;
         let cy = y + NODE_H + V_STACK;
         let maxChildW = 0;
@@ -198,7 +202,7 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         pos.set(p.id, { x, y });
         return { width: V_INDENT + maxChildW, height: cy - V_STACK - y, cx: x + NODE_W / 2 };
       }
-      // Raiz: leque horizontal — dispõe as subárvores lado a lado e centraliza o pai sobre elas.
+      // Leque horizontal — dispõe as subárvores lado a lado e centraliza o pai sobre elas.
       const childY = y + NODE_H + V_GAP;
       let cursor = x;
       let maxChildH = 0;
