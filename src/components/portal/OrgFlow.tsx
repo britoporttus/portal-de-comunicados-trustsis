@@ -43,7 +43,7 @@ function CompanyNode({ data }: NodeProps<{ nome: string }>) {
     <div className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 shadow-sm">
       <Building2 className="size-5 text-primary" />
       <span className="text-sm font-semibold text-foreground">{data.nome}</span>
-      <Handle type="source" position={Position.Bottom} className="!bg-primary" />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="!bg-primary" />
     </div>
   );
 }
@@ -91,7 +91,10 @@ function PersonNode({
       }
       style={area ? { borderLeftColor: `hsl(${hue(area)} 60% 55%)`, borderLeftWidth: 3 } : undefined}
     >
-      <Handle type="target" position={Position.Top} className="!bg-muted-foreground" />
+      {/* Entrada de cima (modo leque horizontal) e entrada pela ESQUERDA (modo lista vertical,
+          onde a aresta desce pela espinha do gestor e entra pela lateral do card). */}
+      <Handle type="target" position={Position.Top} id="top" className="!bg-muted-foreground" />
+      <Handle type="target" position={Position.Left} id="left" className="!bg-muted-foreground" />
       <Avatar className={"size-10 shrink-0 " + (temTime ? "ring-2 ring-primary/30" : "")}>
         {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}
         <AvatarFallback className={temTime ? "bg-primary/20 text-xs font-semibold text-primary" : "bg-secondary text-xs font-semibold text-muted-foreground"}>
@@ -117,7 +120,16 @@ function PersonNode({
           <Users className="size-3" /> {data.count}
         </span>
       )}
-      <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground" />
+      {/* Saída central (leque horizontal) + saída "espinha" ancorada à esquerda: no modo lista
+          vertical TODAS as arestas partem deste mesmo ponto, formando UMA linha vertical única
+          que ramifica para a direita em cada liderado (conector de organograma indentado). */}
+      <Handle type="source" position={Position.Bottom} id="bottom" className="!bg-muted-foreground" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="spine"
+        style={{ left: 22, transform: "none", opacity: 0 }}
+      />
     </div>
   );
 }
@@ -242,7 +254,11 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
     });
 
     // Emite nós de pessoa + arestas (empresa→raiz e gestor→liderado quando expandido).
-    const emit = (p: Pessoa, parentId: string) => {
+    // `viaSpine` = este nó é um liderado empilhado NA VERTICAL (o pai tem > MANY liderados):
+    // a aresta sai da "espinha" do pai (bottom-left) e entra pela ESQUERDA deste card, para
+    // todas compartilharem a mesma linha vertical e ramificarem limpo — sem o emaranhado de
+    // curvas que aparecia ligando bottom-center → top-center.
+    const emit = (p: Pessoa, parentId: string, viaSpine: boolean) => {
       const xy = pos.get(p.id)!;
       const filhos = childrenOf.get(p.id) ?? [];
       ns.push({
@@ -253,10 +269,19 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         draggable: false,
         selectable: false,
       });
-      es.push({ id: `e:${parentId}-${p.id}`, source: parentId, target: p.id, type: "smoothstep" });
-      if (expanded.has(p.id)) for (const f of filhos) emit(f, p.id);
+      es.push({
+        id: `e:${parentId}-${p.id}`,
+        source: parentId,
+        target: p.id,
+        type: "smoothstep",
+        sourceHandle: viaSpine ? "spine" : "bottom",
+        targetHandle: viaSpine ? "left" : "top",
+      });
+      // Os liderados DESTE nó empilham na vertical quando ele passa do teto MANY.
+      const childrenVertical = expanded.has(p.id) && filhos.length > MANY;
+      if (expanded.has(p.id)) for (const f of filhos) emit(f, p.id, childrenVertical);
     };
-    for (const r of roots) emit(r, EMPRESA_ID);
+    for (const r of roots) emit(r, EMPRESA_ID, false);
 
     return { nodes: ns, edges: es };
   }, [roots, childrenOf, expanded, empresa, onToggle]);
