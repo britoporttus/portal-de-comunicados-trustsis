@@ -1,15 +1,16 @@
 // Organograma interativo (árvore) com reactflow, montado a partir do campo `manager`
 // (managerId) do Entra ID: Empresa → líderes de topo → seus liderados, recursivamente.
 // Cada pessoa com liderados é expansível/recolhível; o canvas é pan/zoom (fitView).
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background, Controls, Handle, Position,
-  type Node, type Edge, type NodeProps,
+  type Node, type Edge, type NodeProps, type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react";
 import type { Pessoa } from "@/lib/types";
 import { iniciais } from "@/lib/format";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const NODE_W = 220;
@@ -107,8 +108,16 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
     return { childrenOf, roots, byId };
   }, [diretorio]);
 
-  // Raízes começam expandidas (mostra o primeiro nível do time); os demais sob demanda.
+  const isMobile = useIsMobile();
+
+  // Default de expansão SENSÍVEL À TELA (responsividade): no desktop as raízes começam
+  // expandidas (mostra o 1º nível do time); no MOBILE começam RECOLHIDAS — só empresa +
+  // líderes de topo — pra os nós ficarem grandes e legíveis num canvas estreito; o usuário
+  // expande sob demanda tocando no contador de time. Reaplica ao cruzar o breakpoint.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(roots.map((r) => r.id)));
+  useEffect(() => {
+    setExpanded(new Set(isMobile ? [] : roots.map((r) => r.id)));
+  }, [isMobile, roots]);
 
   const onToggle = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -176,21 +185,36 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
 
   const totalPessoas = byId.size;
 
+  // Re-enquadra o canvas sempre que o conjunto de nós muda (expandir/recolher) — sem isto o
+  // reactflow só faz fitView na 1ª carga e a árvore "escapa" do quadro ao expandir no mobile.
+  const rfRef = useRef<ReactFlowInstance | null>(null);
+  useEffect(() => {
+    if (!rfRef.current) return;
+    const t = setTimeout(() => rfRef.current?.fitView({ padding: 0.15, duration: 250 }), 60);
+    return () => clearTimeout(t);
+  }, [nodes.length]);
+
   return (
-    <div className="h-[70vh] max-h-[680px] min-h-[440px] w-full overflow-hidden rounded-2xl border border-border bg-secondary/30">
+    <div className="h-[68vh] max-h-[680px] min-h-[420px] w-full touch-pan-y overflow-hidden rounded-2xl border border-border bg-secondary/30">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onInit={(inst) => {
+          rfRef.current = inst;
+        }}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: isMobile ? 0.12 : 0.2 }}
         minZoom={0.15}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
         nodesConnectable={false}
+        zoomOnScroll={!isMobile}
+        panOnScroll={false}
+        preventScrolling={!isMobile}
       >
         <Background gap={20} className="!bg-transparent" />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} position={isMobile ? "top-left" : "bottom-left"} />
       </ReactFlow>
       <span className="sr-only">{totalPessoas} pessoas no organograma</span>
     </div>
