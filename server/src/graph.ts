@@ -303,6 +303,30 @@ export async function getOrg(
 ): Promise<OrgNode> {
   const target = upn || config.entra.demoUserUpn;
   if (!graphEnabled || !target) return mockOrg();
+
+  // CAMINHO RÁPIDO (instantâneo): com o diretório do scan diário em mãos, a estrutura
+  // pessoal (self/gestor/liderados) é DERIVADA do próprio cache — SEM nenhuma chamada ao
+  // vivo ao Graph. A página de organograma só consome `diretorio` (já cacheado com fotos),
+  // então isto elimina o delay de vários segundos que vinha das ~4 chamadas por request
+  // (perfil + foto + manager + directReports) que rodavam a cada abertura da tela.
+  if (opts?.diretorio && opts.diretorio.length) {
+    const dir = opts.diretorio;
+    const alvo = target.toLowerCase();
+    const self =
+      dir.find((p) => p.id.toLowerCase() === alvo) ??
+      dir.find((p) => (p.email ?? "").toLowerCase() === alvo);
+    if (self) {
+      const gestor = self.managerId ? dir.find((p) => p.id === self.managerId) : undefined;
+      const liderados = dir.filter((p) => p.managerId === self.id);
+      return { ...self, gestor, liderados, diretorio: dir };
+    }
+    // Usuário fora do diretório cacheado (ex.: fora da cadeia do CEO): serve mesmo assim o
+    // diretório fixado, com estrutura pessoal mínima — continua SEM chamada ao vivo.
+    return { id: alvo, nome: "—", liderados: [], diretorio: dir };
+  }
+
+  // Sem cache (1ª vez / snapshot ainda vazio): caminho ao vivo (mais lento, inclui baixar
+  // o diretório completo). Assim que o scan diário roda, as próximas aberturas são instantâneas.
   try {
     const u = await graphGet(`/users/${encodeURIComponent(target)}?$select=${SELECT}`);
     const self = mapPessoa(u);
