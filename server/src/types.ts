@@ -90,6 +90,10 @@ export interface Feedback {
   paraNome: string; // nome do destinatário
   mensagem: string;
   criadoEm: string; // ISO
+  // Fotos resolvidas no MOMENTO da resposta (não persistidas — evita inchar o store com
+  // data URLs). Preenchidas a partir do diretório para o mural/listas mostrarem o rosto.
+  deFoto?: string;
+  paraFoto?: string;
 }
 
 export interface Store {

@@ -139,6 +139,9 @@ export interface Feedback {
   paraNome: string;
   mensagem: string;
   criadoEm: string;
+  /** Fotos resolvidas pelo backend (diretório) — mostram o rosto no mural/listas. */
+  deFoto?: string;
+  paraFoto?: string;
 }
 
 export interface FeedbacksResposta {

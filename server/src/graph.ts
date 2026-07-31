@@ -84,9 +84,10 @@ function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
   return undefined;
 }
 
-/** Mantém apenas o CEO (Claudio) e quem reporta a ele — direta ou indiretamente.
- *  Reduz o diretório às pessoas conectadas à cadeia de gestão do CEO (remove contas
- *  soltas/sem vínculo). Seguro contra ciclos (usa conjunto de visitados). */
+/** Mantém o CEO (Claudio) e quem reporta a ele — direta ou indiretamente — MAIS as pessoas
+ *  de topo (sem gestor no diretório) que tenham cargo ou área (sócios/execs, ex.: joao.brito,
+ *  que não tem manager e antes sumia das buscas). Remove contas soltas de serviço/salas
+ *  (sem cargo nem área). Seguro contra ciclos (usa conjunto de visitados). */
 function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
   const byId = new Map(pessoas.map((p) => [p.id, p]));
   const ceo =
@@ -114,6 +115,16 @@ function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
         fila.push(f.id);
       }
     }
+  }
+  // Além da cadeia do CEO, mantém pessoas de TOPO (sem gestor no diretório) que sejam
+  // colaboradores REAIS — têm cargo OU área. Isso inclui sócios/execs que não reportam a
+  // ninguém (ex.: joao.brito, que não tem manager e antes sumia das buscas), sem reintroduzir
+  // salas/contas de serviço (essas normalmente não têm cargo nem departamento).
+  for (const p of pessoas) {
+    if (keep.has(p.id)) continue;
+    const temGestorNoDir = p.managerId && byId.has(p.managerId) && p.managerId !== p.id;
+    const pessoaReal = Boolean(p.cargo || p.area);
+    if (!temGestorNoDir && pessoaReal) keep.add(p.id);
   }
   return pessoas.filter((p) => keep.has(p.id));
 }

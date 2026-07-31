@@ -9,7 +9,7 @@ import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartmen
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
 import {
-  registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG,
+  registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave,
 } from "./pontos.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
@@ -269,9 +269,20 @@ app.post("/api/pontos", (req, res) => {
 // Feed público dos feedbacks mais recentes (mural) — visível a todos.
 app.get("/api/feedbacks", (req, res) => {
   const upn = upnDaRequisicao(req);
-  const todos = [...(getStore().feedbacks ?? [])].sort(
-    (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
-  );
+  // Enriquece cada feedback com nome/foto ATUAIS do diretório (o de/para pode ser um oid,
+  // não um e-mail). Assim o mural e as listas mostram sempre o rosto e o nome corretos,
+  // mesmo que o nome capturado no envio fosse um fallback. Fotos NÃO são persistidas.
+  const enriquecer = (f: Feedback): Feedback => ({
+    ...f,
+    // Mantém o nome capturado no envio, mas garante um fallback legível se vier vazio.
+    deNome: f.deNome || perfilDeChave(f.de).nome,
+    paraNome: f.paraNome || perfilDeChave(f.para).nome,
+    deFoto: perfilDeChave(f.de).fotoUrl,
+    paraFoto: perfilDeChave(f.para).fotoUrl,
+  });
+  const todos = [...(getStore().feedbacks ?? [])]
+    .sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm))
+    .map(enriquecer);
   res.json({
     recentes: todos.slice(0, 50),
     recebidos: upn ? todos.filter((f) => f.para === upn) : [],

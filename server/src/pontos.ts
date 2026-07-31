@@ -81,12 +81,26 @@ function diretorio(): Pessoa[] {
 }
 
 function nomeDeUpn(upn: string, dir: Pessoa[]): { nome: string; fotoUrl?: string; cargo?: string; area?: string } {
-  const p = dir.find((x) => (x.email ?? "").toLowerCase() === upn.toLowerCase());
+  const chave = (upn || "").toLowerCase();
+  // Casa por E-MAIL ou por ID (oid). Em produção a identidade resolvida costuma ser o
+  // `oid` (GUID) — não o e-mail — quando o login já é um member @trustsis.com (sem alias
+  // de domínio). Sem o match por id, o GUID vazava como "nome" no ranking/feedback.
+  const p =
+    dir.find((x) => (x.email ?? "").toLowerCase() === chave) ??
+    dir.find((x) => x.id.toLowerCase() === chave);
   if (p) return { nome: p.nome, fotoUrl: p.fotoUrl, cargo: p.cargo, area: p.area };
-  // Sem correspondência no diretório: usa a parte local do e-mail como nome legível.
-  const local = upn.split("@")[0].replace(/[._-]+/g, " ");
+  // Sem correspondência no diretório: se for um e-mail, usa a parte local como nome
+  // legível; se for um GUID (sem @), evita exibir o id cru — mostra rótulo neutro.
+  if (!chave.includes("@")) return { nome: "Colaborador" };
+  const local = chave.split("@")[0].replace(/[._-]+/g, " ");
   const nome = local.replace(/\b\w/g, (c) => c.toUpperCase());
   return { nome };
+}
+
+/** Resolve nome/foto/cargo/área de uma chave (e-mail ou oid) contra o diretório atual.
+ *  Exposto para outros módulos (ex.: enriquecer os feedbacks com a foto de quem enviou/recebeu). */
+export function perfilDeChave(chave: string): { nome: string; fotoUrl?: string; cargo?: string; area?: string } {
+  return nomeDeUpn(chave, diretorio());
 }
 
 export interface RankingEntry {

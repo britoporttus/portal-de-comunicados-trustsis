@@ -95,25 +95,46 @@ function ColegaPicker({
   );
 }
 
+/** Avatar pequeno com foto (quando houver) e fallback de iniciais. */
+function FotoMini({ nome, foto, className }: { nome: string; foto?: string; className?: string }) {
+  return (
+    <Avatar className={className ?? "size-9 shrink-0"}>
+      {foto && <AvatarImage src={foto} alt={nome} />}
+      <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
+        {iniciais(nome)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 function CartaoFeedback({ f, tipo }: { f: Feedback; tipo: "recebido" | "enviado" | "mural" }) {
-  const nome = tipo === "enviado" ? f.paraNome : f.deNome;
-  const prefixo = tipo === "enviado" ? "Para" : tipo === "mural" ? `${f.deNome} → ${f.paraNome}` : "De";
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <Avatar className="size-9 shrink-0">
-          <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
-            {iniciais(tipo === "mural" ? f.deNome : nome)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">
-            {tipo === "mural" ? prefixo : `${prefixo} ${nome}`}
-          </p>
-          <p className="text-xs text-muted-foreground">{tempoRelativo(f.criadoEm)}</p>
+      {tipo === "mural" ? (
+        // Mural: rosto de quem enviou → rosto de quem recebeu.
+        <div className="flex items-center gap-2">
+          <FotoMini nome={f.deNome} foto={f.deFoto} className="size-8 shrink-0" />
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">{f.deNome}</span>
+          <Heart className="size-3.5 shrink-0 text-primary" />
+          <FotoMini nome={f.paraNome} foto={f.paraFoto} className="size-8 shrink-0" />
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">{f.paraNome}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground">{tempoRelativo(f.criadoEm)}</span>
         </div>
-        <Heart className="size-4 shrink-0 text-primary" />
-      </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <FotoMini
+            nome={tipo === "enviado" ? f.paraNome : f.deNome}
+            foto={tipo === "enviado" ? f.paraFoto : f.deFoto}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">
+              {tipo === "enviado" ? `Para ${f.paraNome}` : `De ${f.deNome}`}
+            </p>
+            <p className="text-xs text-muted-foreground">{tempoRelativo(f.criadoEm)}</p>
+          </div>
+          <Heart className="size-4 shrink-0 text-primary" />
+        </div>
+      )}
       <p className="mt-3 whitespace-pre-line text-sm text-foreground">{f.mensagem}</p>
     </div>
   );
