@@ -89,7 +89,7 @@ export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => vo
       onClick={onNavigate}
       aria-label="Página inicial"
       title="TrustSis"
-      className="flex items-center overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="flex items-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <img src={logoMark} alt="TrustSis" className="h-9 w-auto shrink-0" />
       <img
