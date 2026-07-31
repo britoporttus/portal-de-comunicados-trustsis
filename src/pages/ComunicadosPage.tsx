@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 import type { Comunicado, Categoria, Prioridade, PublicoAlvo } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { comprimirImagem } from "@/lib/image";
-import { tempoRelativo, CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
+import { tempoRelativo, iniciais, CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const MAX_IMAGENS = 3;
 
@@ -77,6 +78,15 @@ export default function ComunicadosPage() {
   // Departamentos existentes (Entra) para o seletor de segmentação — só admin cadastra.
   const { data: deptData } = useAsync(() => (isAdmin ? api.departamentos() : Promise.resolve([])), [isAdmin]);
   const deptOptions = deptData ?? [];
+  // Diretório (só admin) para resolver quem confirmou a leitura: e-mail -> pessoa.
+  const { data: org } = useAsync(() => (isAdmin ? api.org() : Promise.resolve(null)), [isAdmin]);
+  const pessoaPorEmail = useMemo(() => {
+    const m = new Map<string, { nome: string; cargo?: string; area?: string; fotoUrl?: string }>();
+    for (const p of org?.diretorio ?? []) {
+      if (p.email) m.set(p.email.toLowerCase(), p);
+    }
+    return m;
+  }, [org]);
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -85,6 +95,7 @@ export default function ComunicadosPage() {
   const [confirmando, setConfirmando] = useState<string | null>(null);
   const [processandoImg, setProcessandoImg] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [verLeitores, setVerLeitores] = useState<Comunicado | null>(null);
 
   const meuUpn = (me?.email ?? "").toLowerCase();
 
@@ -295,12 +306,20 @@ export default function ComunicadosPage() {
                       </div>
                     )}
 
-                    {/* Contagem de confirmações (visão admin) */}
+                    {/* Contagem de confirmações (visão admin) — clique para ver quem confirmou */}
                     {c.obrigatorio && isAdmin && (
-                      <p className="inline-flex items-center gap-1.5 pt-1 text-xs text-muted-foreground">
-                        <Users className="size-3.5" />
-                        {totalLeituras} confirmaç{totalLeituras === 1 ? "ão" : "ões"} de leitura
-                      </p>
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => totalLeituras > 0 && setVerLeitores(c)}
+                          disabled={totalLeituras === 0}
+                          className="inline-flex items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors enabled:hover:text-primary enabled:hover:underline disabled:cursor-default"
+                        >
+                          <Users className="size-3.5" />
+                          {totalLeituras} confirmaç{totalLeituras === 1 ? "ão" : "ões"} de leitura
+                          {totalLeituras > 0 && <span className="text-primary">· ver quem</span>}
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -538,6 +557,39 @@ export default function ComunicadosPage() {
               className="max-h-[85vh] w-full rounded-xl object-contain"
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Quem confirmou a leitura (visão admin) */}
+      <Dialog open={!!verLeitores} onOpenChange={(o) => !o && setVerLeitores(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmações de leitura</DialogTitle>
+            <DialogDescription className="line-clamp-2">
+              {verLeitores?.titulo} · {(verLeitores?.leituras?.length ?? 0)} pessoa
+              {(verLeitores?.leituras?.length ?? 0) === 1 ? "" : "s"} confirmaram
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-1 overflow-y-auto">
+            {(verLeitores?.leituras ?? []).map((upn) => {
+              const p = pessoaPorEmail.get(upn.toLowerCase());
+              const nome = p?.nome ?? upn;
+              return (
+                <div key={upn} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-secondary">
+                  <Avatar className="size-9 shrink-0">
+                    {p?.fotoUrl && <AvatarImage src={p.fotoUrl} alt={nome} />}
+                    <AvatarFallback className="text-xs">{iniciais(nome)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">{nome}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {p?.cargo ? `${p.cargo}${p.area ? ` · ${p.area}` : ""}` : upn}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

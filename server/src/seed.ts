@@ -48,7 +48,11 @@ export function seedData(): Store {
         publicadoEm: daysFromNow(-3, 14, 0),
         obrigatorio: true,
         publico: "todos",
-        leituras: [],
+        leituras: [
+          "joao.ribeiro@trustsis.com.br",
+          "larissa.menezes@trustsis.com.br",
+          "bruna.carvalho@trustsis.com.br",
+        ],
       },
       {
         id: "com_4",
