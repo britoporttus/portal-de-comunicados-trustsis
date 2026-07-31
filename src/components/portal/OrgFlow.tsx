@@ -309,6 +309,9 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         type: "smoothstep",
         sourceHandle: "bottom",
         targetHandle: viaSpine ? "left" : "top",
+        // Cor/espessura EXPLÍCITAS: o cinza-claro padrão do reactflow some no fundo branco
+        // da imagem exportada (as ligações "desapareciam"). Slate médio lê bem no claro e no escuro.
+        style: { stroke: "#64748b", strokeWidth: 1.5 },
       });
       // Os liderados DESTE nó empilham na vertical quando ele passa do teto MANY.
       const childrenVertical = expanded.has(p.id) && filhos.length > MANY;
@@ -349,19 +352,23 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
       try {
         const bounds = getRectOfNodes(nodes);
         const PAD = 56;
-        const MAXDIM = 8000; // teto de segurança pro canvas do navegador
+        // Teto ALTO: mantém os cards em tamanho REAL (zoom=1) mesmo em orgs grandes — antes a
+        // árvore inteira era encolhida pra caber em 8000px e o texto ficava ilegível.
+        const MAXDIM = 12000;
         const rawW = bounds.width + PAD * 2;
         const rawH = bounds.height + PAD * 2;
         const zoom = Math.min(1, MAXDIM / rawW, MAXDIM / rawH);
         const w = Math.ceil(rawW * zoom);
         const h = Math.ceil(rawH * zoom);
+        // DPI extra pra o texto ficar nítido, sem estourar o limite de dimensão de canvas (~16k).
+        const pixelRatio = Math.min(2, 15000 / w, 15000 / h);
         const tx = (PAD - bounds.x) * zoom;
         const ty = (PAD - bounds.y) * zoom;
         const dataUrl = await toPng(viewport, {
           backgroundColor: "#ffffff",
           width: w,
           height: h,
-          pixelRatio: 1,
+          pixelRatio,
           cacheBust: true,
           style: {
             width: `${w}px`,

@@ -115,6 +115,14 @@ export default function HomePage() {
                         {c.autor} · {tempoRelativo(c.publicadoEm)}
                       </p>
                     </div>
+                    {c.imagens?.[0] && (
+                      <img
+                        src={c.imagens[0]}
+                        alt=""
+                        loading="lazy"
+                        className="size-14 shrink-0 rounded-lg border border-border object-cover shadow-sm"
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
