@@ -1,5 +1,5 @@
 // Dados iniciais (exemplo) do portal — usados no primeiro boot e no MODO DEMO.
-import type { Store } from "./types.js";
+import type { Store, PontoEvento, Feedback, TipoPonto } from "./types.js";
 
 const now = new Date();
 const iso = (d: Date) => d.toISOString();
@@ -10,8 +10,114 @@ const daysFromNow = (n: number, h = 9, m = 0) => {
   return iso(d);
 };
 
+// ---- Gamificação: pontos e feedbacks de exemplo (para o ranking já nascer preenchido) ----
+const VALOR: Record<TipoPonto, number> = {
+  visita_diaria: 5,
+  ler_comunicado: 10,
+  confirmar_leitura: 15,
+  abrir_social: 8,
+  feedback_enviado: 5,
+  feedback_recebido: 20,
+};
+// Dia D deste mês (limitado a 27 para não estourar em meses curtos).
+const desteMes = (dia: number, h = 10) =>
+  iso(new Date(now.getFullYear(), now.getMonth(), Math.min(Math.max(dia, 1), 27), h, 0, 0));
+
+/** Gera N lançamentos de um tipo para um usuário, em dias distintos deste mês.
+ *  Usa dedup "seed|…" para NÃO colidir com o dedup real das ações do usuário. */
+function lancamentos(upn: string, tipo: TipoPonto, dias: number[]): PontoEvento[] {
+  return dias.map((dia, i) => ({
+    id: `pt_seed_${upn.split("@")[0]}_${tipo}_${i}`,
+    upn,
+    tipo,
+    pontos: VALOR[tipo],
+    dedup: `seed|${upn}|${tipo}|${dia}|${i}`,
+    criadoEm: desteMes(dia, 9 + (i % 8)),
+  }));
+}
+
+function seedPontos(): PontoEvento[] {
+  const larissa = "larissa.menezes@trustsis.com.br";
+  const ana = "ana.costa@trustsis.com.br";
+  const pedro = "pedro.dias@trustsis.com.br";
+  const joao = "joao.ribeiro@trustsis.com.br";
+  const bruna = "bruna.carvalho@trustsis.com.br";
+  const marcos = "marcos.antonio@trustsis.com.br";
+  return [
+    ...lancamentos(larissa, "visita_diaria", [1, 2, 3, 4, 5, 8, 9, 10]),
+    ...lancamentos(larissa, "ler_comunicado", [2, 4, 8, 10]),
+    ...lancamentos(larissa, "abrir_social", [3, 5, 9]),
+    ...lancamentos(larissa, "confirmar_leitura", [2, 8]),
+    ...lancamentos(ana, "visita_diaria", [1, 2, 3, 5, 8, 10]),
+    ...lancamentos(ana, "ler_comunicado", [3, 5, 9]),
+    ...lancamentos(ana, "abrir_social", [4, 10]),
+    ...lancamentos(ana, "confirmar_leitura", [3]),
+    ...lancamentos(pedro, "visita_diaria", [2, 4, 5, 9]),
+    ...lancamentos(pedro, "ler_comunicado", [4, 9]),
+    ...lancamentos(pedro, "abrir_social", [5]),
+    ...lancamentos(joao, "visita_diaria", [1, 3, 8]),
+    ...lancamentos(joao, "ler_comunicado", [3]),
+    ...lancamentos(joao, "confirmar_leitura", [8]),
+    ...lancamentos(bruna, "visita_diaria", [2, 5]),
+    ...lancamentos(bruna, "abrir_social", [5]),
+    ...lancamentos(marcos, "visita_diaria", [3]),
+  ];
+}
+
+function seedFeedbacks(): Feedback[] {
+  return [
+    {
+      id: "fb_seed_1",
+      de: "ana.costa@trustsis.com.br",
+      deNome: "Ana Beatriz Costa",
+      para: "larissa.menezes@trustsis.com.br",
+      paraNome: "Larissa Menezes",
+      mensagem:
+        "Seu trabalho no redesenho do portal ficou impecável. Atenção aos detalhes e ótima colaboração com o time. Parabéns!",
+      criadoEm: desteMes(9, 16),
+    },
+    {
+      id: "fb_seed_2",
+      de: "marcos.antonio@trustsis.com.br",
+      deNome: "Marcos Antônio",
+      para: "ana.costa@trustsis.com.br",
+      paraNome: "Ana Beatriz Costa",
+      mensagem: "Excelente condução da entrega do trimestre. Liderança de referência para a área.",
+      criadoEm: desteMes(6, 11),
+    },
+    {
+      id: "fb_seed_3",
+      de: "pedro.dias@trustsis.com.br",
+      deNome: "Pedro Henrique Dias",
+      para: "joao.ribeiro@trustsis.com.br",
+      paraNome: "João Ribeiro",
+      mensagem: "Valeu pela ajuda na revisão de código de ontem, salvou o deploy! 🙌",
+      criadoEm: desteMes(4, 14),
+    },
+  ];
+}
+
+/** Pontos derivados dos feedbacks (destinatário + remetente) — mantém ranking coerente. */
+function pontosDeFeedbacks(fbs: Feedback[]): PontoEvento[] {
+  return fbs.flatMap((f) => [
+    {
+      id: `pt_seed_fbr_${f.id}`, upn: f.para, tipo: "feedback_recebido" as TipoPonto,
+      pontos: VALOR.feedback_recebido, refId: f.id,
+      dedup: `seed|${f.para}|feedback_recebido|${f.id}`, criadoEm: f.criadoEm,
+    },
+    {
+      id: `pt_seed_fbe_${f.id}`, upn: f.de, tipo: "feedback_enviado" as TipoPonto,
+      pontos: VALOR.feedback_enviado, refId: f.id,
+      dedup: `seed|${f.de}|feedback_enviado|${f.id}`, criadoEm: f.criadoEm,
+    },
+  ]);
+}
+
 export function seedData(): Store {
+  const feedbacks = seedFeedbacks();
   return {
+    pontos: [...seedPontos(), ...pontosDeFeedbacks(feedbacks)],
+    feedbacks,
     comunicados: [
       {
         id: "com_1",

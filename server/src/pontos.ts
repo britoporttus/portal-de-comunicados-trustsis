@@ -1,0 +1,146 @@
+// Motor de gamificação: registra pontos (com dedup anti-farm), agrega o ranking mensal
+// e resolve nomes/fotos dos participantes. O ledger vive no store (JSON) como `pontos`.
+import type { PontoEvento, TipoPonto, Pessoa } from "./types.js";
+import { getStore, mutate, newId } from "./store.js";
+import { getCachedDiretorio } from "./cache.js";
+import { isGraphOn } from "./graph.js";
+import { mockPeople } from "./mock.js";
+
+/** Valor e rótulo de cada tipo de ação. Fonte da verdade dos pontos (o cliente NUNCA
+ *  informa quantos pontos vale — o servidor decide, evitando manipulação). */
+export const PONTOS_CONFIG: Record<TipoPonto, { pontos: number; label: string }> = {
+  visita_diaria: { pontos: 5, label: "Visita diária ao portal" },
+  ler_comunicado: { pontos: 10, label: "Leu um comunicado" },
+  confirmar_leitura: { pontos: 15, label: "Confirmou leitura obrigatória" },
+  abrir_social: { pontos: 8, label: "Acessou uma rede social" },
+  feedback_enviado: { pontos: 5, label: "Enviou um feedback" },
+  feedback_recebido: { pontos: 20, label: "Recebeu um feedback" },
+};
+
+/** Mês corrente no formato YYYY-MM (horário do servidor). */
+export function mesAtual(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function diaAtual(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Constrói a chave de idempotência de um evento — define a granularidade do "1x". */
+function dedupKey(upn: string, tipo: TipoPonto, refId?: string): string {
+  switch (tipo) {
+    case "visita_diaria":
+      return `${upn}|visita_diaria|${diaAtual()}`; // 1x por dia
+    case "abrir_social":
+      return `${upn}|abrir_social|${refId ?? "?"}|${diaAtual()}`; // 1x/dia por post
+    case "ler_comunicado":
+    case "confirmar_leitura":
+      return `${upn}|${tipo}|${refId ?? "?"}`; // 1x por comunicado (para sempre)
+    default:
+      // feedback_*: refId é o id (único) do feedback → naturalmente idempotente
+      return `${upn}|${tipo}|${refId ?? newId("fb")}`;
+  }
+}
+
+export interface RegistroResultado {
+  registrado: boolean; // false quando já havia pontuado (dedup)
+  pontos: number; // pontos concedidos neste registro (0 se dedup)
+  tipo: TipoPonto;
+}
+
+/** Concede pontos de uma ação, respeitando o dedup. Idempotente. */
+export function registrarPonto(upn: string, tipo: TipoPonto, refId?: string): RegistroResultado {
+  const conf = PONTOS_CONFIG[tipo];
+  const chaveUsuario = (upn || "").toLowerCase();
+  if (!conf || !chaveUsuario) return { registrado: false, pontos: 0, tipo };
+  const dedup = dedupKey(chaveUsuario, tipo, refId);
+
+  return mutate((s) => {
+    if (!s.pontos) s.pontos = [];
+    if (s.pontos.some((p) => p.dedup === dedup)) {
+      return { registrado: false, pontos: 0, tipo };
+    }
+    const ev: PontoEvento = {
+      id: newId("pt"),
+      upn: chaveUsuario,
+      tipo,
+      pontos: conf.pontos,
+      refId,
+      dedup,
+      criadoEm: new Date().toISOString(),
+    };
+    s.pontos.push(ev);
+    return { registrado: true, pontos: conf.pontos, tipo };
+  });
+}
+
+/** Diretório disponível para resolver nome/foto (cache do Graph, ou mock em demo). */
+function diretorio(): Pessoa[] {
+  if (isGraphOn) return getCachedDiretorio() ?? [];
+  return mockPeople;
+}
+
+function nomeDeUpn(upn: string, dir: Pessoa[]): { nome: string; fotoUrl?: string; cargo?: string; area?: string } {
+  const p = dir.find((x) => (x.email ?? "").toLowerCase() === upn.toLowerCase());
+  if (p) return { nome: p.nome, fotoUrl: p.fotoUrl, cargo: p.cargo, area: p.area };
+  // Sem correspondência no diretório: usa a parte local do e-mail como nome legível.
+  const local = upn.split("@")[0].replace(/[._-]+/g, " ");
+  const nome = local.replace(/\b\w/g, (c) => c.toUpperCase());
+  return { nome };
+}
+
+export interface RankingEntry {
+  upn: string;
+  nome: string;
+  fotoUrl?: string;
+  cargo?: string;
+  area?: string;
+  total: number;
+  porTipo: Partial<Record<TipoPonto, number>>; // pontos acumulados por tipo
+  posicao: number; // 1-based
+}
+
+/** Ranking agregado de um mês (YYYY-MM). Ordena por total desc, depois nome. */
+export function ranking(mes = mesAtual()): RankingEntry[] {
+  const eventos = (getStore().pontos ?? []).filter((p) => p.criadoEm.slice(0, 7) === mes);
+  const dir = diretorio();
+  const porUsuario = new Map<string, { total: number; porTipo: Partial<Record<TipoPonto, number>> }>();
+  for (const e of eventos) {
+    const cur = porUsuario.get(e.upn) ?? { total: 0, porTipo: {} };
+    cur.total += e.pontos;
+    cur.porTipo[e.tipo] = (cur.porTipo[e.tipo] ?? 0) + e.pontos;
+    porUsuario.set(e.upn, cur);
+  }
+  const linhas = [...porUsuario.entries()].map(([upn, v]) => ({
+    upn,
+    ...nomeDeUpn(upn, dir),
+    total: v.total,
+    porTipo: v.porTipo,
+  }));
+  linhas.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
+  return linhas.map((l, i) => ({ ...l, posicao: i + 1 }));
+}
+
+export interface ResumoPontos {
+  mes: string;
+  upn: string;
+  total: number; // pontos do usuário no mês
+  posicao: number | null; // posição no ranking do mês (null se sem pontos)
+  participantes: number; // quantas pessoas pontuaram no mês
+  porTipo: Partial<Record<TipoPonto, number>>;
+}
+
+/** Resumo do usuário atual (para o badge do topo e a seção "meus pontos"). */
+export function resumoDoUsuario(upn: string, mes = mesAtual()): ResumoPontos {
+  const chave = (upn || "").toLowerCase();
+  const rk = ranking(mes);
+  const eu = rk.find((r) => r.upn === chave);
+  return {
+    mes,
+    upn: chave,
+    total: eu?.total ?? 0,
+    posicao: eu?.posicao ?? null,
+    participantes: rk.length,
+    porTipo: eu?.porTipo ?? {},
+  };
+}

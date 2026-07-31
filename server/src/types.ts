@@ -60,6 +60,38 @@ export interface PublicacaoSocial {
   publicadoEm: string;
 }
 
+// ---- Gamificação (ranking + feedback) ----
+/** Ações que geram pontos no portal. */
+export type TipoPonto =
+  | "visita_diaria" // acessou o portal (1x/dia)
+  | "ler_comunicado" // abriu o detalhe de um comunicado (1x por comunicado)
+  | "confirmar_leitura" // confirmou leitura de um comunicado obrigatório (1x por comunicado)
+  | "abrir_social" // acessou uma publicação de rede social (1x/dia por post)
+  | "feedback_enviado" // enviou um feedback a um colega
+  | "feedback_recebido"; // recebeu um feedback de um colega
+
+/** Um lançamento no ledger de pontos. Imutável; ranking é a agregação destes. */
+export interface PontoEvento {
+  id: string;
+  upn: string; // quem pontuou (e-mail/UPN em minúsculas)
+  tipo: TipoPonto;
+  pontos: number;
+  refId?: string; // id do comunicado/social/feedback relacionado (contexto/dedup)
+  dedup: string; // chave de idempotência (evita farm de pontos)
+  criadoEm: string; // ISO
+}
+
+/** Feedback entre colaboradores (aba de feedback). Gera pontos ao destinatário. */
+export interface Feedback {
+  id: string;
+  de: string; // upn de quem enviou
+  deNome: string; // nome de quem enviou (capturado no envio)
+  para: string; // upn do destinatário
+  paraNome: string; // nome do destinatário
+  mensagem: string;
+  criadoEm: string; // ISO
+}
+
 export interface Store {
   comunicados: Comunicado[];
   eventos: Evento[];
@@ -68,6 +100,9 @@ export interface Store {
   social: PublicacaoSocial[];
   // Links personalizados por usuário (chave = e-mail/UPN). Cada um gerencia os seus.
   linksByUser?: Record<string, LinkUtil[]>;
+  // Gamificação: ledger de pontos e feedbacks entre colegas.
+  pontos?: PontoEvento[];
+  feedbacks?: Feedback[];
 }
 
 // ---- Graph / pessoas ----

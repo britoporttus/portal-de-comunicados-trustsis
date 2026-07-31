@@ -32,7 +32,7 @@ const FORM_INICIAL: Partial<PublicacaoSocial> = {
 };
 
 export default function SocialPage() {
-  const { isAdmin } = usePortal();
+  const { isAdmin, me } = usePortal();
   const { data, loading, reload } = useAsync(() => api.social.list());
 
   const [open, setOpen] = useState(false);
@@ -151,6 +151,7 @@ export default function SocialPage() {
                   href={p.url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={() => void api.pontos.registrar("abrir_social", p.id, me?.email)}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
                 >
                   Ver publicação <ExternalLink className="size-3.5" />

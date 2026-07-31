@@ -1,19 +1,26 @@
 // Detalhe de um comunicado: conteúdo COMPLETO + imagens. Acessado pela home (card
 // clicável) ou pelo título na lista de comunicados.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Megaphone, Pin, AlertTriangle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { tempoRelativo } from "@/lib/format";
+import { usePortal } from "@/context/PortalProvider";
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 export default function ComunicadoDetalhePage() {
   const { id = "" } = useParams();
+  const { me } = usePortal();
   const { data: c, loading, error } = useAsync(() => api.comunicados.get(id), [id]);
   const [lightbox, setLightbox] = useState<string | null>(null);
+
+  // Gamificação: abrir o comunicado pontua (1x por comunicado; dedup no backend).
+  useEffect(() => {
+    if (c?.id) void api.pontos.registrar("ler_comunicado", c.id, me?.email);
+  }, [c?.id, me?.email]);
 
   return (
     <div className="mx-auto max-w-3xl">

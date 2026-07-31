@@ -1,5 +1,6 @@
 import {
   Home, Megaphone, CalendarDays, Cake, Plane, Network, LayoutGrid, Share2,
+  Trophy, MessageSquareHeart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,4 +19,6 @@ export const NAV: NavItem[] = [
   { to: "/organograma", label: "Organograma", icon: Network },
   { to: "/links", label: "Links úteis", icon: LayoutGrid },
   { to: "/social", label: "Redes sociais", icon: Share2 },
+  { to: "/ranking", label: "Ranking", icon: Trophy },
+  { to: "/feedback", label: "Feedback", icon: MessageSquareHeart },
 ];

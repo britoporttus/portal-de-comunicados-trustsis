@@ -96,3 +96,53 @@ export interface OrgNode extends Pessoa {
   liderados: Pessoa[];
   diretorio?: Pessoa[];
 }
+
+// ---- Gamificação (ranking + feedback) ----
+export type TipoPonto =
+  | "visita_diaria"
+  | "ler_comunicado"
+  | "confirmar_leitura"
+  | "abrir_social"
+  | "feedback_enviado"
+  | "feedback_recebido";
+
+/** Tipos de ação que o CLIENTE pode registrar diretamente (os demais são server-side). */
+export type TipoPontoCliente = "visita_diaria" | "ler_comunicado" | "abrir_social";
+
+export type PontosConfig = Record<TipoPonto, { pontos: number; label: string }>;
+
+export interface RankingEntry {
+  upn: string;
+  nome: string;
+  fotoUrl?: string;
+  cargo?: string;
+  area?: string;
+  total: number;
+  porTipo: Partial<Record<TipoPonto, number>>;
+  posicao: number;
+}
+
+export interface ResumoPontos {
+  mes: string;
+  upn: string;
+  total: number;
+  posicao: number | null;
+  participantes: number;
+  porTipo: Partial<Record<TipoPonto, number>>;
+}
+
+export interface Feedback {
+  id: string;
+  de: string;
+  deNome: string;
+  para: string;
+  paraNome: string;
+  mensagem: string;
+  criadoEm: string;
+}
+
+export interface FeedbacksResposta {
+  recentes: Feedback[];
+  recebidos: Feedback[];
+  enviados: Feedback[];
+}

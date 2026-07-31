@@ -16,6 +16,7 @@ import { NAV } from "./nav";
 import { Brand } from "./shared";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ThemePicker } from "./ThemePicker";
+import { PontosBadge } from "./PontosBadge";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
@@ -163,6 +164,7 @@ export default function AppLayout() {
                 <Switch checked={verComoUsuario} onCheckedChange={setVerComoUsuario} />
               </label>
             )}
+            <PontosBadge />
             <ThemePicker />
             <BackgroundPicker />
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Alternar tema">

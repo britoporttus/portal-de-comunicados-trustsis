@@ -2,8 +2,17 @@
 import type {
   Me, AgendaItem, OrgNode, Ausencia,
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
+  TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
 } from "./types";
 import { getAuthToken } from "./auth";
+
+/** Sufixo ?upn= para as rotas que dependem da identidade (em produção o backend
+ *  sobrescreve com o usuário real do token; no preview usamos o e-mail do `me`). */
+function comUpn(base: string, upn?: string): string {
+  if (!upn) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}upn=${encodeURIComponent(upn)}`;
+}
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   // Barreira de identidade: quando o SSO está ativo (produção), anexa o idToken como
@@ -79,5 +88,24 @@ export const api = {
     create: (b: Partial<PublicacaoSocial>) => req<PublicacaoSocial>("/social", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<PublicacaoSocial>) => req<PublicacaoSocial>(`/social/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/social/${id}`, { method: "DELETE" }),
+  },
+
+  // ---- Gamificação ----
+  pontos: {
+    config: () => req<PontosConfig>("/pontos/config"),
+    ranking: (mes?: string) =>
+      req<{ mes: string; entradas: RankingEntry[] }>(`/pontos/ranking${mes ? `?mes=${mes}` : ""}`),
+    me: (upn?: string) => req<ResumoPontos>(comUpn("/pontos/me", upn)),
+    // Registra uma ação pontuável. Best-effort: nunca lança para não quebrar a navegação.
+    registrar: (tipo: TipoPontoCliente, refId: string | undefined, upn?: string) =>
+      req<{ registrado: boolean; pontos: number }>(comUpn("/pontos", upn), {
+        method: "POST",
+        body: JSON.stringify({ tipo, refId }),
+      }).catch(() => ({ registrado: false, pontos: 0 })),
+  },
+  feedbacks: {
+    list: (upn?: string) => req<FeedbacksResposta>(comUpn("/feedbacks", upn)),
+    create: (b: { para: string; paraNome: string; mensagem: string; deNome: string }, upn?: string) =>
+      req<Feedback>(comUpn("/feedbacks", upn), { method: "POST", body: JSON.stringify(b) }),
   },
 };

@@ -8,8 +8,11 @@ import { getStore, mutate, newId } from "./store.js";
 import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, isGraphOn } from "./graph.js";
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
+import {
+  registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG,
+} from "./pontos.js";
 import type {
-  Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
+  Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
 } from "./types.js";
 
 const app = express();
@@ -142,6 +145,8 @@ app.post("/api/comunicados/:id/ler", (req, res) => {
     return c;
   });
   if (!updated) return res.status(404).json({ error: "não encontrado" });
+  // Gamificação: confirmar uma leitura obrigatória concede pontos (1x por comunicado).
+  registrarPonto(upn, "confirmar_leitura", req.params.id);
   res.json(updated);
 });
 crud<Evento>("eventos", "eventos", "evt", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
@@ -226,6 +231,83 @@ app.delete("/api/links/:id", (req, res) => {
 });
 
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
+
+// ---------- Gamificação: pontos + ranking ----------
+// A identidade (upn) vem de ?upn= — em PRODUÇÃO o middleware requireAuth SOBRESCREVE esse
+// valor com o usuário REAL do token, então o cliente não consegue pontuar por outra pessoa.
+function upnDaRequisicao(req: import("express").Request): string {
+  return String(req.query.upn || req.body?.upn || "").toLowerCase();
+}
+
+// Tabela de pontos (rótulo + valor de cada ação) — o front usa para exibir a legenda.
+app.get("/api/pontos/config", (_req, res) => res.json(PONTOS_CONFIG));
+
+// Ranking mensal (?mes=YYYY-MM, default mês atual).
+app.get("/api/pontos/ranking", (req, res) => {
+  const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
+  res.json({ mes, entradas: ranking(mes) });
+});
+
+// Resumo do usuário atual (total, posição) — alimenta o badge do topo.
+app.get("/api/pontos/me", (req, res) => {
+  const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
+  res.json(resumoDoUsuario(upnDaRequisicao(req), mes));
+});
+
+// Registra uma ação pontuável (visita diária, leitura de comunicado, acesso a rede social…).
+// O servidor decide o valor e o dedup; o corpo só informa { tipo, refId? }.
+const TIPOS_CLIENTE: TipoPonto[] = ["visita_diaria", "ler_comunicado", "abrir_social"];
+app.post("/api/pontos", (req, res) => {
+  const tipo = req.body?.tipo as TipoPonto;
+  if (!TIPOS_CLIENTE.includes(tipo)) return res.status(400).json({ error: "tipo inválido" });
+  const upn = upnDaRequisicao(req);
+  if (!upn) return res.status(400).json({ error: "upn obrigatório" });
+  res.json(registrarPonto(upn, tipo, req.body?.refId));
+});
+
+// ---------- Aba de feedback ----------
+// Feed público dos feedbacks mais recentes (mural) — visível a todos.
+app.get("/api/feedbacks", (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const todos = [...(getStore().feedbacks ?? [])].sort(
+    (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
+  );
+  res.json({
+    recentes: todos.slice(0, 50),
+    recebidos: upn ? todos.filter((f) => f.para === upn) : [],
+    enviados: upn ? todos.filter((f) => f.de === upn) : [],
+  });
+});
+
+// Envia um feedback a um colega. Concede pontos ao destinatário (e um bônus a quem envia).
+app.post("/api/feedbacks", (req, res) => {
+  const de = upnDaRequisicao(req);
+  const para = String(req.body?.para || "").toLowerCase();
+  const mensagem = String(req.body?.mensagem || "").trim();
+  const deNome = String(req.body?.deNome || de.split("@")[0] || "Colega");
+  const paraNome = String(req.body?.paraNome || para.split("@")[0] || "Colega");
+  if (!de) return res.status(400).json({ error: "remetente não identificado" });
+  if (!para || !mensagem) return res.status(400).json({ error: "destinatário e mensagem obrigatórios" });
+  if (para === de) return res.status(400).json({ error: "não é possível enviar feedback a si mesmo" });
+
+  const item: Feedback = {
+    id: newId("fb"),
+    de,
+    deNome,
+    para,
+    paraNome,
+    mensagem: mensagem.slice(0, 800),
+    criadoEm: new Date().toISOString(),
+  };
+  mutate((s) => {
+    if (!s.feedbacks) s.feedbacks = [];
+    s.feedbacks.unshift(item);
+  });
+  // Pontos: destinatário ganha o principal; remetente ganha um incentivo por participar.
+  registrarPonto(para, "feedback_recebido", item.id);
+  registrarPonto(de, "feedback_enviado", item.id);
+  res.status(201).json(item);
+});
 
 // ---------- estático (produção): serve o SPA buildado no MESMO origin da API ----------
 // Na VM, o backend serve tanto /api quanto o front (dist/), então MSAL redirectUri e as

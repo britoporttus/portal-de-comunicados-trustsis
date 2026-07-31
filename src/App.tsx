@@ -12,6 +12,8 @@ import FeriasPage from "@/pages/FeriasPage";
 import OrganogramaPage from "@/pages/OrganogramaPage";
 import LinksPage from "@/pages/LinksPage";
 import SocialPage from "@/pages/SocialPage";
+import RankingPage from "@/pages/RankingPage";
+import FeedbackPage from "@/pages/FeedbackPage";
 
 // Portal interno TrustSis: PortalProvider carrega o /api/me (Graph/Entra ou demo) e
 // o AppLayout (sidebar + topbar) envolve as páginas via <Outlet/>.
@@ -34,6 +36,8 @@ function Gated() {
         <Route path="organograma" element={<OrganogramaPage />} />
         <Route path="links" element={<LinksPage />} />
         <Route path="social" element={<SocialPage />} />
+        <Route path="ranking" element={<RankingPage />} />
+        <Route path="feedback" element={<FeedbackPage />} />
         <Route path="*" element={<HomePage />} />
       </Route>
     </Routes>
