@@ -94,11 +94,11 @@ function emailDe(p: Pessoa): string {
   return (p.email ?? "").toLowerCase();
 }
 
-/** Mantém o CEO (Claudio) e quem reporta a ele — direta ou indiretamente — MAIS as pessoas
- *  de topo (sem gestor no diretório) que tenham cargo ou área (sócios/execs, ex.: joao.brito,
- *  que não tem manager e antes sumia das buscas) — E MAIS os e-mails da lista SEMPRE_MANTER
- *  (exceção manual p/ quem não tem nem cargo/área, mas precisa aparecer). Remove contas soltas
- *  de serviço/salas (sem cargo nem área). Seguro contra ciclos (usa conjunto de visitados). */
+/** Mantém o CEO (Claudio) e quem reporta a ele — direta ou indiretamente — MAIS somente os
+ *  e-mails da lista SEMPRE_MANTER (exceção manual e EXPLÍCITA p/ quem precisa aparecer mesmo
+ *  fora da cadeia do CEO, ex.: joao.brito@trustsis.com). Todo o resto que não está na cadeia
+ *  do CEO fica de fora (inclui salas, contas de serviço e demais pessoas de topo que o usuário
+ *  não quer no diretório). Seguro contra ciclos (usa conjunto de visitados). */
 function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
   const byId = new Map(pessoas.map((p) => [p.id, p]));
   const ceo =
@@ -127,19 +127,11 @@ function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
       }
     }
   }
-  // Além da cadeia do CEO, mantém pessoas de TOPO (sem gestor no diretório) que sejam
-  // colaboradores REAIS — têm cargo OU área. Isso inclui sócios/execs que não reportam a
-  // ninguém (ex.: joao.brito, que não tem manager e antes sumia das buscas), sem reintroduzir
-  // salas/contas de serviço (essas normalmente não têm cargo nem departamento).
+  // Além da cadeia do CEO, mantém APENAS os e-mails da lista SEMPRE_MANTER (exceção manual).
+  // Nada mais é reintroduzido — pessoas de topo fora da cadeia do CEO ficam de fora.
   for (const p of pessoas) {
     if (keep.has(p.id)) continue;
-    if (SEMPRE_MANTER.has(emailDe(p))) {
-      keep.add(p.id);
-      continue;
-    }
-    const temGestorNoDir = p.managerId && byId.has(p.managerId) && p.managerId !== p.id;
-    const pessoaReal = Boolean(p.cargo || p.area);
-    if (!temGestorNoDir && pessoaReal) keep.add(p.id);
+    if (SEMPRE_MANTER.has(emailDe(p))) keep.add(p.id);
   }
   return pessoas.filter((p) => keep.has(p.id));
 }

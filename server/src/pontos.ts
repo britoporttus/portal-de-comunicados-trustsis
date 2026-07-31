@@ -48,10 +48,32 @@ export interface RegistroResultado {
   tipo: TipoPonto;
 }
 
+/** Diretório disponível para resolver nome/foto (cache do Graph, ou mock em demo). */
+function diretorio(): Pessoa[] {
+  if (isGraphOn) return getCachedDiretorio() ?? [];
+  return mockPeople;
+}
+
+/** Chave CANÔNICA de identidade: colapsa oid(GUID) e e-mail da MESMA pessoa numa única
+ *  chave. Em prod a identidade resolvida oscila entre o oid (GUID) e o e-mail conforme a
+ *  sessão/login — sem isso o mesmo colaborador pontua sob duas chaves e aparece DUPLICADO
+ *  no ranking. Preferimos o e-mail (estável e legível); caímos no id só se não houver e-mail;
+ *  e, se a chave não casar no diretório, devolvemos ela mesma (normalizada). */
+function chaveCanonica(upn: string, dir: Pessoa[]): string {
+  const chave = (upn || "").toLowerCase();
+  if (!chave) return chave;
+  const p =
+    dir.find((x) => (x.email ?? "").toLowerCase() === chave) ??
+    dir.find((x) => x.id.toLowerCase() === chave);
+  if (!p) return chave;
+  return (p.email ?? "").toLowerCase() || p.id.toLowerCase();
+}
+
 /** Concede pontos de uma ação, respeitando o dedup. Idempotente. */
 export function registrarPonto(upn: string, tipo: TipoPonto, refId?: string): RegistroResultado {
   const conf = PONTOS_CONFIG[tipo];
-  const chaveUsuario = (upn || "").toLowerCase();
+  // Grava já na chave canônica → novos eventos ficam consistentes (não duplicam no futuro).
+  const chaveUsuario = chaveCanonica(upn, diretorio());
   if (!conf || !chaveUsuario) return { registrado: false, pontos: 0, tipo };
   const dedup = dedupKey(chaveUsuario, tipo, refId);
 
@@ -72,12 +94,6 @@ export function registrarPonto(upn: string, tipo: TipoPonto, refId?: string): Re
     s.pontos.push(ev);
     return { registrado: true, pontos: conf.pontos, tipo };
   });
-}
-
-/** Diretório disponível para resolver nome/foto (cache do Graph, ou mock em demo). */
-function diretorio(): Pessoa[] {
-  if (isGraphOn) return getCachedDiretorio() ?? [];
-  return mockPeople;
 }
 
 function nomeDeUpn(upn: string, dir: Pessoa[]): { nome: string; fotoUrl?: string; cargo?: string; area?: string } {
@@ -120,10 +136,13 @@ export function ranking(mes = mesAtual()): RankingEntry[] {
   const dir = diretorio();
   const porUsuario = new Map<string, { total: number; porTipo: Partial<Record<TipoPonto, number>> }>();
   for (const e of eventos) {
-    const cur = porUsuario.get(e.upn) ?? { total: 0, porTipo: {} };
+    // Agrega pela chave canônica → colapsa eventos do mesmo colaborador que ficaram
+    // gravados sob oid e e-mail diferentes (sincroniza os dados históricos, sem migração).
+    const chave = chaveCanonica(e.upn, dir);
+    const cur = porUsuario.get(chave) ?? { total: 0, porTipo: {} };
     cur.total += e.pontos;
     cur.porTipo[e.tipo] = (cur.porTipo[e.tipo] ?? 0) + e.pontos;
-    porUsuario.set(e.upn, cur);
+    porUsuario.set(chave, cur);
   }
   const linhas = [...porUsuario.entries()].map(([upn, v]) => ({
     upn,
@@ -146,7 +165,7 @@ export interface ResumoPontos {
 
 /** Resumo do usuário atual (para o badge do topo e a seção "meus pontos"). */
 export function resumoDoUsuario(upn: string, mes = mesAtual()): ResumoPontos {
-  const chave = (upn || "").toLowerCase();
+  const chave = chaveCanonica(upn, diretorio());
   const rk = ranking(mes);
   const eu = rk.find((r) => r.upn === chave);
   return {
