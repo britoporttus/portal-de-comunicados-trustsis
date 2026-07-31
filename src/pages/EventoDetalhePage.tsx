@@ -36,11 +36,22 @@ export default function EventoDetalhePage() {
       ) : (
         <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {e.imagem && (
-            <img
-              src={e.imagem}
-              alt={e.titulo}
-              className="max-h-80 w-full border-b border-border object-cover"
-            />
+            // Banner: mostra a imagem INTEIRA (object-contain, sem corte) sobre uma cópia
+            // borrada dela mesma — preenche a moldura sem faixas vazias, seja qual for a
+            // proporção do arquivo enviado.
+            <div className="relative flex max-h-96 items-center justify-center overflow-hidden border-b border-border bg-secondary">
+              <img
+                src={e.imagem}
+                alt=""
+                aria-hidden
+                className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-40 blur-2xl"
+              />
+              <img
+                src={e.imagem}
+                alt={e.titulo}
+                className="relative max-h-96 w-auto max-w-full object-contain"
+              />
+            </div>
           )}
           <div className="p-6">
             {meta && Icon && (
