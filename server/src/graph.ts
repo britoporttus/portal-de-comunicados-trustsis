@@ -84,10 +84,21 @@ function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
   return undefined;
 }
 
+// Exceção explícita: e-mails que devem SEMPRE aparecer no diretório, mesmo sem gestor
+// E sem cargo/área preenchidos no Entra. Caso do joao.brito@trustsis.com — sócio que não
+// tem manager nem cargo/área no Graph, então caía fora do filtro do CEO (e da regra de
+// "topo com cargo ou área"), aparecendo como e-mail cru e sem foto nas confirmações/ranking/mural.
+const SEMPRE_MANTER = new Set<string>(["joao.brito@trustsis.com"]);
+
+function emailDe(p: Pessoa): string {
+  return (p.email ?? "").toLowerCase();
+}
+
 /** Mantém o CEO (Claudio) e quem reporta a ele — direta ou indiretamente — MAIS as pessoas
  *  de topo (sem gestor no diretório) que tenham cargo ou área (sócios/execs, ex.: joao.brito,
- *  que não tem manager e antes sumia das buscas). Remove contas soltas de serviço/salas
- *  (sem cargo nem área). Seguro contra ciclos (usa conjunto de visitados). */
+ *  que não tem manager e antes sumia das buscas) — E MAIS os e-mails da lista SEMPRE_MANTER
+ *  (exceção manual p/ quem não tem nem cargo/área, mas precisa aparecer). Remove contas soltas
+ *  de serviço/salas (sem cargo nem área). Seguro contra ciclos (usa conjunto de visitados). */
 function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
   const byId = new Map(pessoas.map((p) => [p.id, p]));
   const ceo =
@@ -122,6 +133,10 @@ function limitarAoCeo(pessoas: Pessoa[]): Pessoa[] {
   // salas/contas de serviço (essas normalmente não têm cargo nem departamento).
   for (const p of pessoas) {
     if (keep.has(p.id)) continue;
+    if (SEMPRE_MANTER.has(emailDe(p))) {
+      keep.add(p.id);
+      continue;
+    }
     const temGestorNoDir = p.managerId && byId.has(p.managerId) && p.managerId !== p.id;
     const pessoaReal = Boolean(p.cargo || p.area);
     if (!temGestorNoDir && pessoaReal) keep.add(p.id);
