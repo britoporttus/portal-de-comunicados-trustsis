@@ -2,10 +2,11 @@
 // Suporta segmentação por tipo de contrato (CLT/PJ) e por departamento, além de
 // comunicados obrigatórios com confirmação de leitura por colaborador.
 import { useMemo, useState } from "react";
-import { Megaphone, Plus, Pencil, Pin, AlertTriangle, CheckCircle2, Users } from "lucide-react";
+import { Megaphone, Plus, Pencil, Pin, AlertTriangle, CheckCircle2, Users, ImagePlus, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Comunicado, Categoria, Prioridade, PublicoAlvo } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
+import { comprimirImagem } from "@/lib/image";
 import { tempoRelativo, CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
@@ -16,6 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
+const MAX_IMAGENS = 3;
 
 const CATEGORIAS = Object.keys(CATEGORIA_META) as Categoria[];
 const PRIORIDADES = Object.keys(PRIORIDADE_META) as Prioridade[];
@@ -37,6 +41,7 @@ interface FormState {
   publico: PublicoAlvo;
   departamentos: string[];
   obrigatorio: boolean;
+  imagens: string[];
 }
 
 const FORM_INICIAL: FormState = {
@@ -50,6 +55,7 @@ const FORM_INICIAL: FormState = {
   publico: "todos",
   departamentos: [],
   obrigatorio: false,
+  imagens: [],
 };
 
 /** Decide se o comunicado é destinado ao colaborador (por contrato e departamento). */
@@ -76,6 +82,8 @@ export default function ComunicadosPage() {
   const [form, setForm] = useState<FormState>(FORM_INICIAL);
   const [submitting, setSubmitting] = useState(false);
   const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [processandoImg, setProcessandoImg] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const meuUpn = (me?.email ?? "").toLowerCase();
 
@@ -105,9 +113,28 @@ export default function ComunicadosPage() {
       publico: c.publico ?? "todos",
       departamentos: c.departamentos ?? [],
       obrigatorio: c.obrigatorio ?? false,
+      imagens: c.imagens ?? [],
     });
     setOpen(true);
   };
+
+  // Comprime cada arquivo escolhido e anexa (respeitando o teto de MAX_IMAGENS).
+  const adicionarImagens = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setProcessandoImg(true);
+    try {
+      const vagas = MAX_IMAGENS - form.imagens.length;
+      const escolhidos = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, vagas);
+      const novas: string[] = [];
+      for (const f of escolhidos) novas.push(await comprimirImagem(f));
+      if (novas.length) setForm((f) => ({ ...f, imagens: [...f.imagens, ...novas].slice(0, MAX_IMAGENS) }));
+    } finally {
+      setProcessandoImg(false);
+    }
+  };
+
+  const removerImagem = (idx: number) =>
+    setForm((f) => ({ ...f, imagens: f.imagens.filter((_, i) => i !== idx) }));
 
   const salvar = async () => {
     if (!form.titulo?.trim()) return;
@@ -123,6 +150,7 @@ export default function ComunicadosPage() {
       publico: form.publico,
       departamentos: form.departamentos,
       obrigatorio: form.obrigatorio,
+      imagens: form.imagens,
     };
     try {
       if (editId) {
@@ -221,6 +249,26 @@ export default function ComunicadosPage() {
                     <p className="text-xs text-muted-foreground">
                       {c.autor} · {tempoRelativo(c.publicadoEm)}
                     </p>
+
+                    {/* Imagens anexadas */}
+                    {(c.imagens ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {(c.imagens ?? []).map((src, i) => (
+                          <button
+                            type="button"
+                            key={i}
+                            onClick={() => setLightbox(src)}
+                            className="size-24 overflow-hidden rounded-lg border border-border bg-secondary transition-opacity hover:opacity-90"
+                          >
+                            <img
+                              src={src}
+                              alt={`Imagem ${i + 1} do comunicado`}
+                              className="size-full object-cover"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Confirmação de leitura (obrigatórios) */}
                     {c.obrigatorio && !isAdmin && (
@@ -406,6 +454,49 @@ export default function ComunicadosPage() {
           />
         </Field>
 
+        <Field label="Imagens" htmlFor="imagens" hint={`Anexe até ${MAX_IMAGENS} imagens (JPG/PNG).`}>
+          <div className="space-y-2">
+            {form.imagens.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {form.imagens.map((src, i) => (
+                  <div
+                    key={i}
+                    className="group relative size-20 overflow-hidden rounded-lg border border-border bg-secondary"
+                  >
+                    <img src={src} alt={`Imagem ${i + 1}`} className="size-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removerImagem(i)}
+                      aria-label="Remover imagem"
+                      className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-foreground/70 text-background opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {form.imagens.length < MAX_IMAGENS && (
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
+                <ImagePlus className="size-4" />
+                {processandoImg ? "Processando…" : "Adicionar imagem"}
+                <input
+                  id="imagens"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  disabled={processandoImg}
+                  onChange={(e) => {
+                    void adicionarImagens(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </Field>
+
         <div className="flex flex-wrap gap-5">
           <Label htmlFor="obrigatorio" className="cursor-pointer">
             <input
@@ -430,6 +521,20 @@ export default function ComunicadosPage() {
           </Label>
         </div>
       </FormDialog>
+
+      {/* Lightbox de imagem */}
+      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+        <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
+          <DialogTitle className="sr-only">Imagem do comunicado</DialogTitle>
+          {lightbox && (
+            <img
+              src={lightbox}
+              alt="Imagem do comunicado"
+              className="max-h-[85vh] w-full rounded-xl object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -18,6 +18,7 @@ export interface Comunicado {
   departamentos?: string[];
   obrigatorio?: boolean;
   leituras?: string[];
+  imagens?: string[]; // até 3 imagens anexadas (data URLs)
 }
 
 export interface Evento {

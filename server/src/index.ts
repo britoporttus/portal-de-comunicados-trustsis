@@ -13,7 +13,8 @@ import type {
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+// Limite alto: comunicados podem trazer até 3 imagens embutidas como data URL (base64).
+app.use(express.json({ limit: "16mb" }));
 
 // ---------- meta / saúde ----------
 // Health fica ANTES da barreira (monitoração externa não precisa de token).

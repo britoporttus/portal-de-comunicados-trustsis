@@ -20,6 +20,7 @@ export interface Comunicado {
   departamentos?: string[]; // vazio/ausente = todos os departamentos
   obrigatorio?: boolean; // exige confirmação de leitura
   leituras?: string[]; // e-mails/UPN de quem confirmou a leitura
+  imagens?: string[]; // até 3 imagens anexadas (data URLs comprimidas)
 }
 
 export interface Evento {

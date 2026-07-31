@@ -9,14 +9,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background, Controls, Handle, Position,
+  getRectOfNodes,
   type Node, type Edge, type NodeProps, type ReactFlowInstance,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { ChevronDown, ChevronRight, Building2, Users } from "lucide-react";
+import { toPng } from "html-to-image";
+import { ChevronDown, ChevronRight, Building2, Users, Download, Loader2 } from "lucide-react";
 import type { Pessoa } from "@/lib/types";
 import { iniciais } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 const NODE_W = 220;
 const NODE_H = 56; // altura aproximada do card (usada no cálculo do layout)
@@ -188,6 +191,21 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
     });
   }, []);
 
+  // ---- Exportar organograma COMPLETO e ABERTO como imagem (PNG) ----
+  // Todo gestor (qualquer id com liderados) fica expandido; capturamos a árvore inteira,
+  // mesmo a parte fora do quadro, e devolvemos o estado de expansão anterior no fim.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [exportando, setExportando] = useState(false);
+  const restaurarRef = useRef<Set<string> | null>(null);
+  const allManagerIds = useMemo(() => new Set(childrenOf.keys()), [childrenOf]);
+
+  const exportarImagem = useCallback(() => {
+    if (exportando) return;
+    restaurarRef.current = expanded;
+    setExpanded(new Set(allManagerIds)); // abre tudo
+    setExportando(true);
+  }, [exportando, expanded, allManagerIds]);
+
   const { nodes, edges } = useMemo(() => {
     const ns: Node[] = [];
     const es: Edge[] = [];
@@ -313,8 +331,81 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
     return () => clearTimeout(t);
   }, [nodes.length, isMobile]);
 
+  // Dispara a captura quando o estado "exportando" está ativo e a árvore já re-renderizou aberta.
+  useEffect(() => {
+    if (!exportando) return;
+    let cancelado = false;
+    const finalizar = () => {
+      if (restaurarRef.current) setExpanded(restaurarRef.current);
+      restaurarRef.current = null;
+      setExportando(false);
+    };
+    const run = async () => {
+      // Espera o layout assentar (nós medidos, arestas desenhadas, fotos carregadas).
+      await new Promise((r) => setTimeout(r, 450));
+      if (cancelado) return;
+      const viewport = containerRef.current?.querySelector<HTMLElement>(".react-flow__viewport");
+      if (!viewport || nodes.length === 0) return finalizar();
+      try {
+        const bounds = getRectOfNodes(nodes);
+        const PAD = 56;
+        const MAXDIM = 8000; // teto de segurança pro canvas do navegador
+        const rawW = bounds.width + PAD * 2;
+        const rawH = bounds.height + PAD * 2;
+        const zoom = Math.min(1, MAXDIM / rawW, MAXDIM / rawH);
+        const w = Math.ceil(rawW * zoom);
+        const h = Math.ceil(rawH * zoom);
+        const tx = (PAD - bounds.x) * zoom;
+        const ty = (PAD - bounds.y) * zoom;
+        const dataUrl = await toPng(viewport, {
+          backgroundColor: "#ffffff",
+          width: w,
+          height: h,
+          pixelRatio: 1,
+          cacheBust: true,
+          style: {
+            width: `${w}px`,
+            height: `${h}px`,
+            transform: `translate(${tx}px, ${ty}px) scale(${zoom})`,
+          },
+        });
+        if (cancelado) return;
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "organograma-trustsis.png";
+        a.click();
+      } catch (err) {
+        console.error("Falha ao exportar organograma", err);
+        alert("Não foi possível exportar o organograma. Tente novamente.");
+      } finally {
+        finalizar();
+      }
+    };
+    void run();
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportando, nodes]);
+
   return (
-    <div className="h-[68vh] max-h-[680px] min-h-[420px] w-full touch-pan-y overflow-hidden rounded-2xl border border-border bg-secondary/30">
+    <div
+      ref={containerRef}
+      className="relative h-[68vh] max-h-[680px] min-h-[420px] w-full touch-pan-y overflow-hidden rounded-2xl border border-border bg-secondary/30"
+    >
+      <div className="absolute right-3 top-3 z-10">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={exportarImagem}
+          disabled={exportando}
+          className="bg-card/90 shadow-sm backdrop-blur"
+          title="Baixar o organograma completo e aberto como imagem PNG"
+        >
+          {exportando ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          {exportando ? "Gerando…" : "Exportar imagem"}
+        </Button>
+      </div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
