@@ -4,7 +4,9 @@ import AppLayout from "@/components/portal/AppLayout";
 import AuthGate from "@/components/portal/AuthGate";
 import HomePage from "@/pages/HomePage";
 import ComunicadosPage from "@/pages/ComunicadosPage";
+import ComunicadoDetalhePage from "@/pages/ComunicadoDetalhePage";
 import EventosPage from "@/pages/EventosPage";
+import EventoDetalhePage from "@/pages/EventoDetalhePage";
 import AniversariantesPage from "@/pages/AniversariantesPage";
 import FeriasPage from "@/pages/FeriasPage";
 import OrganogramaPage from "@/pages/OrganogramaPage";
@@ -24,7 +26,9 @@ function Gated() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="comunicados" element={<ComunicadosPage />} />
+        <Route path="comunicados/:id" element={<ComunicadoDetalhePage />} />
         <Route path="eventos" element={<EventosPage />} />
+        <Route path="eventos/:id" element={<EventoDetalhePage />} />
         <Route path="aniversariantes" element={<AniversariantesPage />} />
         <Route path="ferias" element={<FeriasPage />} />
         <Route path="organograma" element={<OrganogramaPage />} />

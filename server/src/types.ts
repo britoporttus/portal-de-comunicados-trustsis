@@ -31,6 +31,7 @@ export interface Evento {
   inicio: string; // ISO
   fim?: string; // ISO
   local: string;
+  imagem?: string; // foto opcional (data URL comprimida) — aparece no lugar da data
 }
 
 export interface Aniversariante {

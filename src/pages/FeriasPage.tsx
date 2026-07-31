@@ -4,10 +4,11 @@ import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { iniciais, dataLonga } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
+import { ScanStatus } from "@/components/portal/ScanStatus";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function FeriasPage() {
-  const { data, loading } = useAsync(() => api.ferias());
+  const { data, loading, reload } = useAsync(() => api.ferias());
   const ausencias = data ?? [];
 
   return (
@@ -16,6 +17,7 @@ export default function FeriasPage() {
         icon={Plane}
         title="Quem está de férias"
         description="Colaboradores ausentes ou de férias no momento"
+        action={<ScanStatus onRefreshed={reload} />}
       />
 
       {loading ? (

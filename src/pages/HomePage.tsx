@@ -101,28 +101,33 @@ export default function HomePage() {
             ) : (
               <ul className="divide-y divide-border">
                 {(comunicados.data ?? []).slice(0, 5).map((c) => (
-                  <li key={c.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <CategoriaBadge categoria={c.categoria} />
-                        {c.fixado && <Pin className="size-3 text-primary" />}
+                  <li key={c.id} className="first:pt-0 last:pb-0">
+                    <Link
+                      to={`/comunicados/${c.id}`}
+                      className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-secondary/60"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <CategoriaBadge categoria={c.categoria} />
+                          {c.fixado && <Pin className="size-3 text-primary" />}
+                        </div>
+                        <h3 className="truncate font-medium text-foreground">{c.titulo}</h3>
+                        {c.resumo && (
+                          <p className="line-clamp-1 text-sm text-muted-foreground">{c.resumo}</p>
+                        )}
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {c.autor} · {tempoRelativo(c.publicadoEm)}
+                        </p>
                       </div>
-                      <h3 className="truncate font-medium text-foreground">{c.titulo}</h3>
-                      {c.resumo && (
-                        <p className="line-clamp-1 text-sm text-muted-foreground">{c.resumo}</p>
+                      {c.imagens?.[0] && (
+                        <img
+                          src={c.imagens[0]}
+                          alt=""
+                          loading="lazy"
+                          className="size-24 shrink-0 rounded-lg border border-border object-cover shadow-sm"
+                        />
                       )}
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {c.autor} · {tempoRelativo(c.publicadoEm)}
-                      </p>
-                    </div>
-                    {c.imagens?.[0] && (
-                      <img
-                        src={c.imagens[0]}
-                        alt=""
-                        loading="lazy"
-                        className="size-24 shrink-0 rounded-lg border border-border object-cover shadow-sm"
-                      />
-                    )}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -142,11 +147,24 @@ export default function HomePage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {(eventos.data ?? []).slice(0, 4).map((e) => (
-                  <div key={e.id} className="flex gap-3 rounded-lg border border-border p-3">
-                    <div className="flex w-12 shrink-0 flex-col items-center rounded-md bg-primary/15 py-1.5 text-center text-primary">
-                      <span className="text-base font-bold leading-none">{new Date(e.inicio).getDate()}</span>
-                      <span className="text-[10px] uppercase">{dataLonga(e.inicio).split(" de ")[1]?.slice(0, 3)}</span>
-                    </div>
+                  <Link
+                    key={e.id}
+                    to={`/eventos/${e.id}`}
+                    className="flex gap-3 rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-secondary/60"
+                  >
+                    {e.imagem ? (
+                      <img
+                        src={e.imagem}
+                        alt={e.titulo}
+                        loading="lazy"
+                        className="size-12 shrink-0 rounded-md border border-border object-cover"
+                      />
+                    ) : (
+                      <div className="flex w-12 shrink-0 flex-col items-center rounded-md bg-primary/15 py-1.5 text-center text-primary">
+                        <span className="text-base font-bold leading-none">{new Date(e.inicio).getDate()}</span>
+                        <span className="text-[10px] uppercase">{dataLonga(e.inicio).split(" de ")[1]?.slice(0, 3)}</span>
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-medium text-foreground">{e.titulo}</h3>
                       <p className="truncate text-xs text-muted-foreground">
@@ -154,7 +172,7 @@ export default function HomePage() {
                         {e.local && ` | ${e.local}`}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

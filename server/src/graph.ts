@@ -262,9 +262,45 @@ export async function getAgenda(upn?: string): Promise<AgendaItem[]> {
   }
 }
 
-/** Organograma: estrutura pessoal (gestor/liderados) + diretório COMPLETO da empresa
- *  (todos os usuários reais do Entra), para não depender só da cadeia de manager. */
-export async function getOrg(upn?: string): Promise<OrgNode> {
+/** Diretório COMPLETO da empresa (todos os usuários ATIVOS @trustsis.com ligados ao CEO,
+ *  com foto). É a parte PESADA do organograma (listagem paginada + fotos) — por isso é
+ *  extraída aqui para o scan diário (cache.ts) chamar 1x/dia, sem depender de um upn. */
+export async function fetchDiretorioLive(): Promise<Pessoa[]> {
+  if (!graphEnabled) return mockOrg().diretorio ?? [];
+  try {
+    // Expande o gestor (manager) de cada usuário para montar a árvore hierárquica.
+    // Se o tenant não permitir $expand=manager, cai para a listagem simples (árvore plana).
+    let todos: any[];
+    try {
+      todos = await listAllUsers("", "manager($select=id)");
+    } catch {
+      todos = await listAllUsers();
+    }
+    const brutos = todos.filter((u) => {
+      // Somente usuários ATIVOS no Entra e com e-mail do domínio @trustsis.com.
+      if (u.accountEnabled === false) return false;
+      const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
+      return mail.endsWith("@trustsis.com");
+    });
+    // Só o CEO (Claudio) e seus liderados diretos/indiretos (filtra antes das fotos
+    // para não baixar fotos de quem será removido).
+    const diretorio = limitarAoCeo(brutos.map(mapPessoa));
+    await attachPhotos(diretorio);
+    diretorio.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    return diretorio;
+  } catch (e) {
+    console.warn("[graph] fetchDiretorioLive falhou:", (e as Error).message);
+    return [];
+  }
+}
+
+/** Organograma: estrutura pessoal (gestor/liderados) + diretório COMPLETO da empresa.
+ *  O `diretorio` (pesado) vem do cache diário quando `opts.diretorio` é passado — assim a
+ *  página abre instantânea; sem cache, busca ao vivo (fallback). */
+export async function getOrg(
+  upn?: string,
+  opts?: { diretorio?: Pessoa[] },
+): Promise<OrgNode> {
   const target = upn || config.entra.demoUserUpn;
   if (!graphEnabled || !target) return mockOrg();
   try {
@@ -288,30 +324,8 @@ export async function getOrg(upn?: string): Promise<OrgNode> {
       await attachPhotos(liderados);
     } catch { /* sem liderados */ }
 
-    let diretorio: Pessoa[] = [];
-    try {
-      // Expande o gestor (manager) de cada usuário para montar a árvore hierárquica.
-      // Se o tenant não permitir $expand=manager, cai para a listagem simples (árvore plana).
-      let todos: any[];
-      try {
-        todos = await listAllUsers("", "manager($select=id)");
-      } catch {
-        todos = await listAllUsers();
-      }
-      const brutos = todos.filter((u) => {
-        // Somente usuários ATIVOS no Entra e com e-mail do domínio @trustsis.com.
-        if (u.accountEnabled === false) return false;
-        const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
-        return mail.endsWith("@trustsis.com");
-      });
-      // Só o CEO (Claudio) e seus liderados diretos/indiretos (filtra antes das fotos
-      // para não baixar fotos de quem será removido).
-      diretorio = limitarAoCeo(brutos.map(mapPessoa));
-      await attachPhotos(diretorio);
-      diretorio.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-    } catch (e) {
-      console.warn("[graph] getOrg diretório falhou:", (e as Error).message);
-    }
+    // Diretório do cache diário (instantâneo) ou ao vivo (1ª vez / cache vazio).
+    const diretorio = opts?.diretorio ?? (await fetchDiretorioLive());
 
     return { ...self, gestor, liderados, diretorio };
   } catch (e) {

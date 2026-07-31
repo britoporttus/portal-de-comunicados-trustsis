@@ -2,6 +2,7 @@
 // Suporta segmentação por tipo de contrato (CLT/PJ) e por departamento, além de
 // comunicados obrigatórios com confirmação de leitura por colaborador.
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Megaphone, Plus, Pencil, Pin, AlertTriangle, CheckCircle2, Users, ImagePlus, X } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Comunicado, Categoria, Prioridade, PublicoAlvo } from "@/lib/types";
@@ -244,7 +245,11 @@ export default function ComunicadosPage() {
                       ))}
                       {c.fixado && <Pin className="size-3.5 text-primary" />}
                     </div>
-                    <h3 className="font-semibold text-foreground">{c.titulo}</h3>
+                    <h3 className="font-semibold text-foreground">
+                      <Link to={`/comunicados/${c.id}`} className="hover:text-primary hover:underline">
+                        {c.titulo}
+                      </Link>
+                    </h3>
                     {c.resumo && <p className="text-sm text-muted-foreground">{c.resumo}</p>}
                     <p className="text-xs text-muted-foreground">
                       {c.autor} · {tempoRelativo(c.publicadoEm)}

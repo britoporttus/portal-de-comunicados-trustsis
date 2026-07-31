@@ -30,8 +30,21 @@ export const api = {
   ferias: () => req<Ausencia[]>("/ferias"),
   departamentos: () => req<string[]>("/departamentos"),
 
+  // Status/execução do scan diário (organograma + férias fixados).
+  scan: {
+    status: () =>
+      req<{ atualizadoEm: string | null; rodando: boolean; pessoas: number; ausencias: number; graph: boolean }>(
+        "/scan/status",
+      ),
+    run: () =>
+      req<{ atualizadoEm: string | null; rodando: boolean; pessoas: number; ausencias: number }>("/scan/run", {
+        method: "POST",
+      }),
+  },
+
   comunicados: {
     list: () => req<Comunicado[]>("/comunicados"),
+    get: (id: string) => req<Comunicado>(`/comunicados/${id}`),
     create: (b: Partial<Comunicado>) => req<Comunicado>("/comunicados", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<Comunicado>) => req<Comunicado>(`/comunicados/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/comunicados/${id}`, { method: "DELETE" }),
@@ -40,6 +53,7 @@ export const api = {
   },
   eventos: {
     list: () => req<Evento[]>("/eventos"),
+    get: (id: string) => req<Evento>(`/eventos/${id}`),
     create: (b: Partial<Evento>) => req<Evento>("/eventos", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<Evento>) => req<Evento>(`/eventos/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/eventos/${id}`, { method: "DELETE" }),

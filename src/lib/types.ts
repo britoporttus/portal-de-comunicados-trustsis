@@ -29,6 +29,7 @@ export interface Evento {
   inicio: string;
   fim?: string;
   local: string;
+  imagem?: string; // foto opcional (data URL) — aparece no lugar da data
 }
 
 export interface Aniversariante {

@@ -7,6 +7,7 @@ import type { Pessoa } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { iniciais } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
+import { ScanStatus } from "@/components/portal/ScanStatus";
 import { OrgFlow } from "@/components/portal/OrgFlow";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,7 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 }
 
 export default function OrganogramaPage() {
-  const { data, loading } = useAsync(() => api.org());
+  const { data, loading, reload } = useAsync(() => api.org());
   const [busca, setBusca] = useState("");
 
   const diretorio = data?.diretorio ?? [];
@@ -80,6 +81,7 @@ export default function OrganogramaPage() {
         icon={Network}
         title="Organograma"
         description="Colaboradores ativos da TrustSis, organizados por departamento"
+        action={<ScanStatus onRefreshed={reload} />}
       />
 
       {loading ? (

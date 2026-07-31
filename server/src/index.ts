@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
 import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, isGraphOn } from "./graph.js";
+import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
@@ -42,11 +43,27 @@ app.get("/api/agenda", async (req, res) => {
 
 app.get("/api/org", async (req, res) => {
   const upn = (req.query.upn as string) || undefined;
-  res.json(await getOrg(upn));
+  // Diretório vem do cache diário (instantâneo); só cai ao vivo na 1ª vez / cache vazio.
+  const diretorio = getCachedDiretorio();
+  res.json(await getOrg(upn, diretorio ? { diretorio } : undefined));
 });
 
 app.get("/api/ferias", async (_req, res) => {
-  res.json(await getVacations());
+  // Servido do scan diário (fixado). Fallback ao vivo só enquanto o cache não encheu.
+  const cached = getCachedFerias();
+  res.json(cached ?? (await getVacations()));
+});
+
+// ---------- scan diário (organograma + férias) ----------
+// Status do último scan (para exibir "atualizado em" nas páginas).
+app.get("/api/scan/status", (_req, res) => {
+  res.json({ ...getSnapshotMeta(), graph: isGraphOn });
+});
+
+// Força um novo scan agora (botão "Atualizar agora" do admin). Sem Graph, no-op.
+app.post("/api/scan/run", async (_req, res) => {
+  await runScan("manual");
+  res.json(getSnapshotMeta());
 });
 
 // Departamentos existentes (para seletores) — leve, sem baixar fotos.
@@ -73,6 +90,12 @@ function crud<T extends { id: string }>(
       res.json(list);
     });
   }
+  // GET por id — usado pelas páginas de detalhe (comunicado/evento completo).
+  app.get(`/api/${path}/:id`, (req, res) => {
+    const item = (getStore()[key] as unknown as T[]).find((x) => x.id === req.params.id);
+    if (!item) return res.status(404).json({ error: "não encontrado" });
+    res.json(item);
+  });
   app.post(`/api/${path}`, (req, res) => {
     const item = { ...req.body, id: newId(idPrefix) } as T;
     mutate((s) => (s[key] as unknown as T[]).unshift(item));
@@ -225,4 +248,6 @@ app.listen(port, "0.0.0.0", () => {
     `[portal-trustsis] API on :${port} — modo ${graphEnabled ? "GRAPH (Entra)" : "DEMO"}` +
     ` — barreira ${authRequired ? "ATIVA (AUTH_REQUIRED)" : "off"}`,
   );
+  // Scan diário do organograma + férias (só com Graph ligado; no-op em demo).
+  startDailyScan();
 });
