@@ -65,10 +65,30 @@ function instance(): PublicClientApplication {
   return pca;
 }
 
-// Guarda anti-loop: garante que o redirect interativo de login dispare NO MÁXIMO uma vez
-// por sessão de aba. Se o usuário voltar do Entra sem conta utilizável (raro), a app
-// renderiza em demo em vez de entrar em loop de redirect.
+// Guarda anti-loop COM AUTO-EXPIRAÇÃO: evita disparar dois redirects de login em
+// sequência imediata (loop), MAS nunca trava o usuário para sempre. Guardamos o
+// INSTANTE do último redirect; passada a janela de cooldown, um novo carregamento
+// pode tentar o login de novo.
+//
+// Bug que isto conserta: antes a flag era um "1" STICKY no sessionStorage. Num Edge
+// corporativo que RESTAURA abas ("continuar de onde parei"), o sessionStorage da aba
+// restaurada PERSISTE entre reinícios → se um retorno de login não completasse limpo
+// UMA vez, a flag ficava "1" eternamente e o initAuth NUNCA mais chamava loginRedirect
+// → o portal ficava preso em "Modo demo" só naquele perfil (outro navegador, com
+// sessionStorage limpo, logava normal).
 const REDIRECT_FLAG = "ts-auth-redirect";
+const REDIRECT_COOLDOWN_MS = 15_000;
+
+/** Já disparamos um redirect de login há POUCOS segundos? (janela anti-loop) */
+function redirectInFlight(): boolean {
+  const ts = Number(sessionStorage.getItem(REDIRECT_FLAG) ?? 0);
+  return ts > 0 && Date.now() - ts < REDIRECT_COOLDOWN_MS;
+}
+
+/** Marca o instante do redirect que estamos prestes a disparar. */
+function markRedirect(): void {
+  sessionStorage.setItem(REDIRECT_FLAG, String(Date.now()));
+}
 
 /** Inicializa a MSAL, resolve o retorno de um eventual redirect e GARANTE a sessão:
  *  1) resolve o retorno de um redirect (ou usa a conta em cache), se houver;
@@ -111,8 +131,8 @@ export async function initAuth(): Promise<void> {
       //    `prompt: "select_account"` força o Entra a MOSTRAR o seletor de contas em
       //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
       //    — assim o usuário escolhe a conta TrustSis explicitamente.
-      if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
-        sessionStorage.setItem(REDIRECT_FLAG, "1");
+      if (!redirectInFlight()) {
+        markRedirect();
         await app.loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" }); // navega para fora
       }
     })();
@@ -148,8 +168,8 @@ export async function getAuthToken(): Promise<string | null> {
     // cookie de terceiro / block_iframe_reload, etc.) → reautenticar por redirect
     // ÚNICO. Nunca condicionar a `instanceof InteractionRequiredAuthError`: no
     // fluxo silent-first o erro real quase nunca é esse tipo exato.
-    if (sessionStorage.getItem(REDIRECT_FLAG) !== "1") {
-      sessionStorage.setItem(REDIRECT_FLAG, "1");
+    if (!redirectInFlight()) {
+      markRedirect();
       await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
     }
     return null; // navega para fora; retorno não chega a ser usado
