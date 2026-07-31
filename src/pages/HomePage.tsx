@@ -1,7 +1,7 @@
 // Página inicial (dashboard): acesso rápido + comunicados, agenda, eventos e aniversariantes.
 import { Link } from "react-router-dom";
 import {
-  Megaphone, CalendarDays, Cake, CalendarClock, ArrowRight, MapPin, Pin,
+  Megaphone, CalendarDays, Cake, CalendarClock, ArrowRight, Pin,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
@@ -120,7 +120,7 @@ export default function HomePage() {
                         src={c.imagens[0]}
                         alt=""
                         loading="lazy"
-                        className="size-14 shrink-0 rounded-lg border border-border object-cover shadow-sm"
+                        className="size-24 shrink-0 rounded-lg border border-border object-cover shadow-sm"
                       />
                     )}
                   </li>
@@ -149,12 +149,10 @@ export default function HomePage() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-medium text-foreground">{e.titulo}</h3>
-                      <p className="text-xs text-muted-foreground">{faixaHorario(e.inicio, e.fim)}</p>
-                      {e.local && (
-                        <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <MapPin className="size-3" /> {e.local}
-                        </p>
-                      )}
+                      <p className="truncate text-xs text-muted-foreground">
+                        {faixaHorario(e.inicio, e.fim)}
+                        {e.local && ` | ${e.local}`}
+                      </p>
                     </div>
                   </div>
                 ))}

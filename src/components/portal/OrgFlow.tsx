@@ -364,8 +364,14 @@ export function OrgFlow({ empresa, diretorio }: { empresa: string; diretorio: Pe
         const pixelRatio = Math.min(2, 15000 / w, 15000 / h);
         const tx = (PAD - bounds.x) * zoom;
         const ty = (PAD - bounds.y) * zoom;
+        // Fundo do export SEGUE O TEMA (o padrão do portal é escuro): num tema escuro os cards
+        // são escuros e SOMEM num fundo branco (era o "branco/meio ruim"); num fundo escuro eles
+        // ganham contorno e o texto claro lê bem. No tema claro, um slate suave dá contraste sem
+        // o branco estourado. Além disso os cards de gestor são translúcidos (bg-primary/7%) e
+        // precisam do backing na cor certa pra o texto não sumir.
+        const isDark = document.documentElement.classList.contains("dark");
         const dataUrl = await toPng(viewport, {
-          backgroundColor: "#ffffff",
+          backgroundColor: isDark ? "#0b1324" : "#e2e8f0",
           width: w,
           height: h,
           pixelRatio,
