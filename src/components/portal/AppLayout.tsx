@@ -68,13 +68,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       )}
     >
       <div className={cn("flex h-16 items-center border-b border-border", collapsed ? "justify-center px-2" : "px-5")}>
-        {collapsed ? (
-          <Button variant="ghost" size="icon" onClick={onToggle} aria-label="Expandir menu">
-            <PanelLeft className="size-5" />
-          </Button>
-        ) : (
-          <Brand />
-        )}
+        <Brand collapsed={collapsed} />
       </div>
       <div className="flex-1 overflow-y-auto py-4">
         <NavList collapsed={collapsed} />

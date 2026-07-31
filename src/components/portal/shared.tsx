@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
 import type { Categoria, Prioridade } from "@/lib/types";
-import logo from "@/assets/logo-trustsis.png";
+import logoMark from "@/assets/logo-trustsis-mark.png";
+import logoWordmark from "@/assets/logo-trustsis-wordmark.png";
 
 const LINK_ICONS: Record<string, LucideIcon> = {
   mail: Mail, users: Users, cloud: Cloud, folder: Folder,
@@ -76,18 +77,29 @@ export function LinkIcon({
   );
 }
 
-export function Brand({ onNavigate }: { onNavigate?: () => void }) {
+/**
+ * Marca do portal. O logo é dividido em duas partes: os 4 quadrados (mark), sempre visíveis,
+ * e o wordmark "TrustSis consultoria", que expande/recolhe com animação conforme o menu.
+ * Ambos usam o PNG transparente (sem caixa branca).
+ */
+export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   return (
     <Link
       to="/"
       onClick={onNavigate}
       aria-label="Página inicial"
-      className="flex items-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title="TrustSis"
+      className="flex items-center overflow-hidden rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
+      <img src={logoMark} alt="TrustSis" className="h-9 w-auto shrink-0" />
       <img
-        src={logo}
-        alt="TrustSis"
-        className="h-11 w-auto rounded-lg bg-white/95 px-2.5 py-1.5 shadow-sm"
+        src={logoWordmark}
+        alt=""
+        aria-hidden
+        className={cn(
+          "h-9 w-auto origin-left transition-all duration-200 ease-out",
+          collapsed ? "ml-0 max-w-0 -translate-x-1 opacity-0" : "ml-2 max-w-[150px] opacity-100",
+        )}
       />
     </Link>
   );
