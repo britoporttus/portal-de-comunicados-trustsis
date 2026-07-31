@@ -90,6 +90,47 @@ function markRedirect(): void {
   sessionStorage.setItem(REDIRECT_FLAG, String(Date.now()));
 }
 
+// Limpa o estado `interaction.status` da MSAL que pode ter ficado PRESO. Esse é o
+// segundo bug do Edge corporativo que RESTAURA abas: a MSAL grava um
+// `msal.<clientId>.interaction.status = "interaction_in_progress"` no storage enquanto
+// um redirect/login está em andamento e só o limpa quando o retorno completa limpo. Se
+// a aba do Entra é fechada no meio (ou o retorno não completa) E o navegador restaura o
+// storage entre reinícios, essa chave fica presa → o PRÓXIMO loginRedirect lança
+// `BrowserAuthError: interaction_in_progress` e NÃO navega → o usuário fica sem login e
+// sem SSO (a tela de "Modo demo"/gate nunca avança). Chamamos isto ANTES de um login
+// novo (nunca durante o retorno de um redirect), quando qualquer status pendente é
+// comprovadamente lixo (não há conta e vamos começar um fluxo do zero).
+function clearStaleInteraction(): void {
+  try {
+    for (const store of [sessionStorage, localStorage]) {
+      const doomed: string[] = [];
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        if (k && k.includes("interaction.status")) doomed.push(k);
+      }
+      doomed.forEach((k) => store.removeItem(k));
+    }
+  } catch {
+    /* storage indisponível — ignorar */
+  }
+}
+
+/** Dispara o loginRedirect de forma robusta: se a MSAL recusar por um
+ *  `interaction_in_progress` preso, limpa o estado e tenta UMA vez mais. Em condições
+ *  normais o primeiro loginRedirect já NAVEGA para fora e o catch nem roda. */
+async function robustLoginRedirect(app: PublicClientApplication): Promise<void> {
+  try {
+    await app.loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" });
+  } catch {
+    clearStaleInteraction();
+    await app
+      .loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" })
+      .catch(() => {
+        /* segue: o gate mostra o botão de tentar de novo */
+      });
+  }
+}
+
 /** Inicializa a MSAL, resolve o retorno de um eventual redirect e GARANTE a sessão:
  *  1) resolve o retorno de um redirect (ou usa a conta em cache), se houver;
  *  2) SEM conta → login por REDIRECT ÚNICO (SSO). Com a sessão do Entra já ativa no
@@ -132,8 +173,9 @@ export async function initAuth(): Promise<void> {
       //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
       //    — assim o usuário escolhe a conta TrustSis explicitamente.
       if (!redirectInFlight()) {
+        clearStaleInteraction(); // não há conta → qualquer status pendente é lixo
         markRedirect();
-        await app.loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" }); // navega para fora
+        await robustLoginRedirect(app); // navega para fora
       }
     })();
   }
@@ -169,11 +211,31 @@ export async function getAuthToken(): Promise<string | null> {
     // ÚNICO. Nunca condicionar a `instanceof InteractionRequiredAuthError`: no
     // fluxo silent-first o erro real quase nunca é esse tipo exato.
     if (!redirectInFlight()) {
+      clearStaleInteraction();
       markRedirect();
-      await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
+      try {
+        await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
+      } catch {
+        clearStaleInteraction();
+        await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account }).catch(() => {});
+      }
     }
     return null; // navega para fora; retorno não chega a ser usado
   }
+}
+
+/** Login EXPLÍCITO por gesto do usuário (botão do gate de acesso). Diferente do
+ *  auto-redirect do initAuth, este IGNORA a janela anti-loop: se o usuário clicou
+ *  "Entrar", ele QUER ir pro SSO agora. Limpa qualquer `interaction_in_progress` preso
+ *  antes de navegar, então é o caminho à prova de estado-local-corrompido (o cenário do
+ *  Edge que restaura abas). No-op no preview (auth desligado). */
+export async function login(): Promise<void> {
+  if (!authEnabled) return;
+  const app = instance();
+  await app.initialize();
+  clearStaleInteraction();
+  markRedirect();
+  await robustLoginRedirect(app);
 }
 
 /** Conta ativa (para exibir nome/UPN, se necessário). */

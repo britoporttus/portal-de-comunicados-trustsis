@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
+import { authEnabled, login } from "@/lib/auth";
 import type { Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
@@ -10,6 +11,11 @@ interface PortalState {
   me: Me | null;
   loading: boolean;
   mode: string; // "graph" | "demo"
+  // Em produção (SSO ligado) o acesso é OBRIGATÓRIO: se, terminado o carregamento, não
+  // há usuário autenticado, o portal NÃO mostra dados de demo — mostra o gate de login
+  // que força o SSO. No preview (auth desligado) isto é sempre false.
+  needsLogin: boolean;
+  login: () => void; // dispara o SSO por gesto do usuário (botão do gate)
   isAdmin: boolean; // papel efetivo (respeita "ver como usuário")
   verComoUsuario: boolean;
   setVerComoUsuario: (v: boolean) => void;
@@ -85,10 +91,12 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
   const isAdmin = Boolean(me?.isAdmin) && !verComoUsuario;
+  // Com SSO ligado e sem usuário após carregar → precisa logar (força o SSO, sem demo).
+  const needsLogin = authEnabled && !loading && !me;
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
+      value={{ me, loading, mode, needsLogin, login, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
     >
       {children}
     </Ctx.Provider>
