@@ -12,6 +12,7 @@ import {
   registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave, atividadeDiaria,
   canonizar, reverterPontosFeedback,
 } from "./pontos.js";
+import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
   Ticket, TicketTipo, TicketPrioridade,
@@ -366,17 +367,50 @@ const TICKET_PRIOS: TicketPrioridade[] = ["baixa", "media", "alta", "critica"];
 
 // "Meus tickets": lista os chamados do usuário atual (separados por solicitante). Usa a chave
 // CANÔNICA (colapsa oid⇄e-mail) porque a identidade oscila entre GUID e e-mail conforme a sessão.
-app.get("/api/tickets", (req, res) => {
+app.get("/api/tickets", async (req, res) => {
   const eu = canonizar(upnDaRequisicao(req));
-  const todos = [...(getStore().tickets ?? [])].sort(
-    (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
-  );
-  res.json(eu ? todos.filter((t) => canonizar(t.solicitante) === eu) : []);
+  let meus = eu
+    ? [...(getStore().tickets ?? [])]
+        .filter((t) => canonizar(t.solicitante) === eu)
+        .sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm))
+    : [];
+
+  // Sincroniza (best-effort) status/responsável dos chamados JÁ espelhados no ITSM que ainda
+  // não estão num estado terminal. Falha do ITSM não afeta a resposta (segue com o local).
+  if (itsmEnabled && meus.length) {
+    const terminais = new Set(["resolvido", "fechado", "cancelado"]);
+    const pendentes = meus.filter((t) => t.externoRef && !terminais.has(t.status));
+    if (pendentes.length) {
+      const updates = await Promise.all(
+        pendentes.map(async (t) => ({ id: t.id, upd: await sincronizarTicket(t.externoRef!) })),
+      );
+      const mudou = updates.filter((u) => u.upd);
+      if (mudou.length) {
+        mutate((s) => {
+          for (const { id, upd } of mudou) {
+            const alvo = s.tickets?.find((x) => x.id === id);
+            if (alvo && upd) {
+              if (upd.status) alvo.status = upd.status;
+              if (upd.responsavel) alvo.responsavel = upd.responsavel;
+              alvo.atualizadoEm = new Date().toISOString();
+            }
+          }
+          return null;
+        });
+        // Reprojeta a lista já com os valores atualizados.
+        meus = [...(getStore().tickets ?? [])]
+          .filter((t) => canonizar(t.solicitante) === eu)
+          .sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+      }
+    }
+  }
+
+  res.json(meus);
 });
 
 // Abre um novo chamado. O servidor fixa status "aberto" e a data de início; o corpo só traz
 // título, descrição, tipo e prioridade. O solicitante vem da identidade da requisição.
-app.post("/api/tickets", (req, res) => {
+app.post("/api/tickets", async (req, res) => {
   const solicitante = upnDaRequisicao(req);
   if (!solicitante) return res.status(400).json({ error: "solicitante não identificado" });
   const titulo = String(req.body?.titulo || "").trim();
@@ -388,7 +422,8 @@ app.post("/api/tickets", (req, res) => {
     ? (req.body.prioridade as TicketPrioridade)
     : "media";
 
-  const item = mutate((s) => {
+  // 1) Grava LOCAL primeiro — é o registro durável do portal (sobrevive a ITSM off/instável).
+  let item = mutate((s) => {
     if (!s.tickets) s.tickets = [];
     const numero = s.tickets.reduce((m, t) => Math.max(m, t.numero || 0), 1000) + 1;
     const t: Ticket = {
@@ -406,6 +441,22 @@ app.post("/api/tickets", (req, res) => {
     s.tickets.unshift(t);
     return t;
   });
+
+  // 2) Espelha no ITSM (se ativo). Sucesso -> guarda a referência/status; falha -> segue local.
+  const eco = await criarTicketNoItsm(item);
+  if (eco) {
+    item = mutate((s) => {
+      const alvo = s.tickets?.find((x) => x.id === item.id);
+      if (alvo) {
+        alvo.externoRef = eco.externoRef;
+        if (eco.status) alvo.status = eco.status;
+        if (eco.responsavel) alvo.responsavel = eco.responsavel;
+        alvo.atualizadoEm = new Date().toISOString();
+      }
+      return alvo ?? item;
+    });
+  }
+
   res.status(201).json(item);
 });
 
