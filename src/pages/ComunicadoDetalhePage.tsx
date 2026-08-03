@@ -9,7 +9,7 @@ import { tempoRelativo } from "@/lib/format";
 import { usePortal } from "@/context/PortalProvider";
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Lightbox } from "@/components/portal/Lightbox";
 
 export default function ComunicadoDetalhePage() {
   const { id = "" } = useParams();
@@ -86,18 +86,11 @@ export default function ComunicadoDetalhePage() {
         </article>
       )}
 
-      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
-          <DialogTitle className="sr-only">Imagem do comunicado</DialogTitle>
-          {lightbox && (
-            <img
-              src={lightbox}
-              alt="Imagem do comunicado"
-              className="max-h-[85vh] w-full rounded-xl object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <Lightbox
+        src={lightbox}
+        alt="Imagem do comunicado"
+        onClose={() => setLightbox(null)}
+      />
     </div>
   );
 }

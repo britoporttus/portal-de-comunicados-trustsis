@@ -3,8 +3,17 @@ import type {
   Me, AgendaItem, OrgNode, Ausencia,
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
+  AtividadeDia,
 } from "./types";
 import { getAuthToken } from "./auth";
+
+/** Evento global disparado sempre que o usuário GANHA pontos (leu comunicado, enviou
+ *  feedback, confirmou leitura…). O badge do topo escuta e recarrega o resumo — assim os
+ *  pontos/posição sincronizam na hora, sem precisar recarregar a página. */
+export const PONTOS_EVENT = "pontos:mudou";
+export function emitirPontosMudou() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(PONTOS_EVENT));
+}
 
 /** Sufixo ?upn= para as rotas que dependem da identidade (em produção o backend
  *  sobrescreve com o usuário real do token; no preview usamos o e-mail do `me`). */
@@ -58,7 +67,9 @@ export const api = {
     update: (id: string, b: Partial<Comunicado>) => req<Comunicado>(`/comunicados/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/comunicados/${id}`, { method: "DELETE" }),
     confirmarLeitura: (id: string, upn: string) =>
-      req<Comunicado>(`/comunicados/${id}/ler`, { method: "POST", body: JSON.stringify({ upn }) }),
+      req<Comunicado>(`/comunicados/${id}/ler`, { method: "POST", body: JSON.stringify({ upn }) }).then(
+        (r) => (emitirPontosMudou(), r),
+      ),
   },
   eventos: {
     list: () => req<Evento[]>("/eventos"),
@@ -96,16 +107,24 @@ export const api = {
     ranking: (mes?: string) =>
       req<{ mes: string; entradas: RankingEntry[] }>(`/pontos/ranking${mes ? `?mes=${mes}` : ""}`),
     me: (upn?: string) => req<ResumoPontos>(comUpn("/pontos/me", upn)),
+    // Extrato de auditoria por dia (admin): como cada usuário pontuou.
+    atividade: (mes?: string) =>
+      req<{ mes: string; dias: AtividadeDia[] }>(`/pontos/atividade${mes ? `?mes=${mes}` : ""}`),
     // Registra uma ação pontuável. Best-effort: nunca lança para não quebrar a navegação.
+    // Se de fato pontuou, avisa o badge do topo (evento global) para sincronizar na hora.
     registrar: (tipo: TipoPontoCliente, refId: string | undefined, upn?: string) =>
       req<{ registrado: boolean; pontos: number }>(comUpn("/pontos", upn), {
         method: "POST",
         body: JSON.stringify({ tipo, refId }),
-      }).catch(() => ({ registrado: false, pontos: 0 })),
+      })
+        .then((r) => (r.registrado && emitirPontosMudou(), r))
+        .catch(() => ({ registrado: false, pontos: 0 })),
   },
   feedbacks: {
     list: (upn?: string) => req<FeedbacksResposta>(comUpn("/feedbacks", upn)),
     create: (b: { para: string; paraNome: string; mensagem: string; deNome: string }, upn?: string) =>
-      req<Feedback>(comUpn("/feedbacks", upn), { method: "POST", body: JSON.stringify(b) }),
+      req<Feedback>(comUpn("/feedbacks", upn), { method: "POST", body: JSON.stringify(b) }).then(
+        (r) => (emitirPontosMudou(), r),
+      ),
   },
 };

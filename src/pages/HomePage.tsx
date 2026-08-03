@@ -55,6 +55,13 @@ export default function HomePage() {
   const aniversariantes = useAsync(() => api.aniversariantes.list());
   const links = useAsync(() => api.links.list(me?.email), [me?.email]);
 
+  // Aniversariantes do MÊS corrente (a API devolve o ano inteiro ordenado por mês/dia;
+  // o painel da home mostra só quem faz aniversário neste mês, ordenado por dia).
+  const mesCorrente = new Date().getMonth() + 1;
+  const aniversariantesDoMes = (aniversariantes.data ?? [])
+    .filter((p) => p.mes === mesCorrente)
+    .sort((a, b) => a.dia - b.dia);
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       {/* Coluna principal (esquerda): acesso rápido + comunicados + eventos, empilhados */}
@@ -213,7 +220,7 @@ export default function HomePage() {
           )}
         </Painel>
 
-        {/* Aniversariantes */}
+        {/* Aniversariantes — SÓ os do mês corrente (a lista da API traz o ano inteiro). */}
         <Painel title={`Aniversariantes de ${mesAtualNome()}`} icon={Cake} to="/aniversariantes">
           {aniversariantes.loading ? (
             <div className="space-y-3">
@@ -221,11 +228,11 @@ export default function HomePage() {
                 <Skeleton key={i} className="h-10 rounded-lg" />
               ))}
             </div>
-          ) : (aniversariantes.data ?? []).length === 0 ? (
+          ) : aniversariantesDoMes.length === 0 ? (
             <LinhaVazia texto="Nenhum aniversariante este mês." />
           ) : (
             <ul className="space-y-3">
-              {(aniversariantes.data ?? []).slice(0, 3).map((p) => (
+              {aniversariantesDoMes.slice(0, 3).map((p) => (
                 <li key={p.id} className="flex items-center gap-3">
                   <Avatar className="size-9 shrink-0">
                     {p.fotoUrl && <AvatarImage src={p.fotoUrl} alt={p.nome} />}

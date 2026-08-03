@@ -1,9 +1,9 @@
 // Badge de pontos no topbar: registra a VISITA DIÁRIA (1x/dia, dedup no backend) e mostra
 // o total do usuário no mês + posição no ranking. Clique leva à página de Ranking.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Trophy } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, PONTOS_EVENT } from "@/lib/api";
 import { usePortal } from "@/context/PortalProvider";
 import type { ResumoPontos } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -12,23 +12,32 @@ export function PontosBadge() {
   const { me } = usePortal();
   const [resumo, setResumo] = useState<ResumoPontos | null>(null);
 
-  useEffect(() => {
-    let vivo = true;
+  // Recarrega só o resumo (total/posição). Chamado no mount, quando o usuário GANHA pontos
+  // (evento global) e ao voltar o foco à aba — assim o badge fica sempre sincronizado.
+  const recarregar = useCallback(async () => {
     if (!me?.email) return;
-    (async () => {
-      // Primeiro pontua a visita do dia, depois lê o resumo já atualizado.
-      await api.pontos.registrar("visita_diaria", undefined, me.email);
-      try {
-        const r = await api.pontos.me(me.email);
-        if (vivo) setResumo(r);
-      } catch {
-        /* silencioso: gamificação não pode quebrar o topbar */
-      }
-    })();
-    return () => {
-      vivo = false;
-    };
+    try {
+      const r = await api.pontos.me(me.email);
+      setResumo(r);
+    } catch {
+      /* silencioso: gamificação não pode quebrar o topbar */
+    }
   }, [me?.email]);
+
+  useEffect(() => {
+    if (!me?.email) return;
+    // Pontua a visita do dia (o próprio registrar dispara o evento → recarrega o resumo).
+    void api.pontos.registrar("visita_diaria", undefined, me.email);
+    void recarregar();
+
+    const aoMudar = () => void recarregar();
+    window.addEventListener(PONTOS_EVENT, aoMudar);
+    window.addEventListener("focus", aoMudar);
+    return () => {
+      window.removeEventListener(PONTOS_EVENT, aoMudar);
+      window.removeEventListener("focus", aoMudar);
+    };
+  }, [me?.email, recarregar]);
 
   const total = resumo?.total ?? 0;
   const posicao = resumo?.posicao;

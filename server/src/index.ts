@@ -9,7 +9,7 @@ import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartmen
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
 import {
-  registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave,
+  registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave, atividadeDiaria,
 } from "./pontos.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
@@ -248,6 +248,13 @@ app.get("/api/pontos/ranking", (req, res) => {
   res.json({ mes, entradas: ranking(mes) });
 });
 
+// EXTRATO ADMIN: pontuação do mês quebrada por DIA e por usuário (como cada um pontuou).
+// A UI só é oferecida a admins; aqui devolvemos os dados (o store não tem PII sensível).
+app.get("/api/pontos/atividade", (req, res) => {
+  const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
+  res.json({ mes, dias: atividadeDiaria(mes) });
+});
+
 // Resumo do usuário atual (total, posição) — alimenta o badge do topo.
 app.get("/api/pontos/me", (req, res) => {
   const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
@@ -315,8 +322,10 @@ app.post("/api/feedbacks", (req, res) => {
     s.feedbacks.unshift(item);
   });
   // Pontos: destinatário ganha o principal; remetente ganha um incentivo por participar.
-  registrarPonto(para, "feedback_recebido", item.id);
-  registrarPonto(de, "feedback_enviado", item.id);
+  // ANTI-FARM: o refId é a CONTRAPARTE (não o id do feedback) → dedup por dia+pessoa, então
+  // spammar feedbacks para/da mesma pessoa no dia pontua só uma vez (ver dedupKey em pontos.ts).
+  registrarPonto(para, "feedback_recebido", de);
+  registrarPonto(de, "feedback_enviado", para);
   res.status(201).json(item);
 });
 

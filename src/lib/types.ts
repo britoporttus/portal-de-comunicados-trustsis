@@ -131,6 +131,29 @@ export interface ResumoPontos {
   porTipo: Partial<Record<TipoPonto, number>>;
 }
 
+/** Extrato de auditoria do admin: como cada usuário pontuou, por dia. */
+export interface AtividadeItem {
+  tipo: TipoPonto;
+  label: string;
+  pontos: number;
+  hora: string; // HH:MM
+  refId?: string;
+}
+export interface AtividadeUsuario {
+  upn: string;
+  nome: string;
+  fotoUrl?: string;
+  cargo?: string;
+  area?: string;
+  total: number;
+  itens: AtividadeItem[];
+}
+export interface AtividadeDia {
+  dia: string; // YYYY-MM-DD
+  total: number;
+  usuarios: AtividadeUsuario[];
+}
+
 export interface Feedback {
   id: string;
   de: string;

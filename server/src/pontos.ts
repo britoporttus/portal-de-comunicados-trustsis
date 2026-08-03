@@ -37,10 +37,19 @@ function dedupKey(upn: string, tipo: TipoPonto, refId?: string): string {
     case "confirmar_leitura":
       return `${upn}|${tipo}|${refId ?? "?"}`; // 1x por comunicado (para sempre)
     default:
-      // feedback_*: refId é o id (único) do feedback → naturalmente idempotente
-      return `${upn}|${tipo}|${refId ?? newId("fb")}`;
+      // feedback_*: ANTI-FARM. `refId` aqui é a CONTRAPARTE (para quem enviou / de quem
+      // recebeu), não o id do feedback. Dedup por dia+contraparte → mandar vários feedbacks
+      // à MESMA pessoa no mesmo dia pontua UMA vez; receber vários da mesma pessoa idem.
+      return `${upn}|${tipo}|${refId ?? "?"}|${diaAtual()}`;
   }
 }
+
+/** Teto DIÁRIO de eventos pontuáveis por tipo (anti-farm). Além do dedup por contraparte,
+ *  limita o total de pontuações no dia — impede farmar disparando feedback para dezenas de
+ *  pessoas diferentes. Tipos ausentes não têm teto. */
+const LIMITE_DIARIO: Partial<Record<TipoPonto, number>> = {
+  feedback_enviado: 5, // no máx. 5 feedbacks enviados pontuam por dia
+};
 
 export interface RegistroResultado {
   registrado: boolean; // false quando já havia pontuado (dedup)
@@ -81,6 +90,15 @@ export function registrarPonto(upn: string, tipo: TipoPonto, refId?: string): Re
     if (!s.pontos) s.pontos = [];
     if (s.pontos.some((p) => p.dedup === dedup)) {
       return { registrado: false, pontos: 0, tipo };
+    }
+    // Teto diário anti-farm: se o tipo tem limite e o usuário já o atingiu hoje, não pontua.
+    const teto = LIMITE_DIARIO[tipo];
+    if (teto != null) {
+      const hoje = diaAtual();
+      const feitosHoje = s.pontos.filter(
+        (p) => p.upn === chaveUsuario && p.tipo === tipo && p.criadoEm.slice(0, 10) === hoje,
+      ).length;
+      if (feitosHoje >= teto) return { registrado: false, pontos: 0, tipo };
     }
     const ev: PontoEvento = {
       id: newId("pt"),
@@ -161,6 +179,68 @@ export interface ResumoPontos {
   posicao: number | null; // posição no ranking do mês (null se sem pontos)
   participantes: number; // quantas pessoas pontuaram no mês
   porTipo: Partial<Record<TipoPonto, number>>;
+}
+
+export interface AtividadeItem {
+  tipo: TipoPonto;
+  label: string; // rótulo legível da ação (PONTOS_CONFIG)
+  pontos: number;
+  hora: string; // HH:MM (horário do evento)
+  refId?: string;
+}
+export interface AtividadeUsuario {
+  upn: string;
+  nome: string;
+  fotoUrl?: string;
+  cargo?: string;
+  area?: string;
+  total: number; // pontos do usuário NAQUELE dia
+  itens: AtividadeItem[]; // como pontuou (do mais recente ao mais antigo)
+}
+export interface AtividadeDia {
+  dia: string; // YYYY-MM-DD
+  total: number; // pontos concedidos no dia (todos os usuários)
+  usuarios: AtividadeUsuario[];
+}
+
+/** EXTRATO ADMIN: quebra a pontuação do mês por DIA e, dentro de cada dia, por usuário,
+ *  listando COMO cada um pontuou (cada ação com valor e horário). Serve o painel de
+ *  auditoria do admin (transparência + detectar abuso). */
+export function atividadeDiaria(mes = mesAtual()): AtividadeDia[] {
+  const eventos = (getStore().pontos ?? []).filter((p) => p.criadoEm.slice(0, 7) === mes);
+  const dir = diretorio();
+  // dia -> chaveCanonica -> agregado do usuário
+  const porDia = new Map<string, Map<string, AtividadeUsuario>>();
+  for (const e of eventos) {
+    const dia = e.criadoEm.slice(0, 10);
+    const chave = chaveCanonica(e.upn, dir);
+    if (!porDia.has(dia)) porDia.set(dia, new Map());
+    const usuarios = porDia.get(dia)!;
+    const perfil = nomeDeUpn(chave, dir);
+    const u =
+      usuarios.get(chave) ??
+      ({ upn: chave, ...perfil, total: 0, itens: [] as AtividadeItem[] } as AtividadeUsuario);
+    u.total += e.pontos;
+    u.itens.push({
+      tipo: e.tipo,
+      label: PONTOS_CONFIG[e.tipo]?.label ?? e.tipo,
+      pontos: e.pontos,
+      hora: e.criadoEm.slice(11, 16),
+      refId: e.refId,
+    });
+    usuarios.set(chave, u);
+  }
+  const dias = [...porDia.entries()].map(([dia, usuarios]) => {
+    const lista = [...usuarios.values()].map((u) => ({
+      ...u,
+      itens: u.itens.sort((a, b) => b.hora.localeCompare(a.hora)),
+    }));
+    lista.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, "pt-BR"));
+    return { dia, total: lista.reduce((s, u) => s + u.total, 0), usuarios: lista };
+  });
+  // Dias do mais recente para o mais antigo.
+  dias.sort((a, b) => b.dia.localeCompare(a.dia));
+  return dias;
 }
 
 /** Resumo do usuário atual (para o badge do topo e a seção "meus pontos"). */

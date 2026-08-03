@@ -385,7 +385,13 @@ export async function getBirthdays(): Promise<Aniversariante[]> {
     const comData = users.filter((u) => {
       if (!u.birthday) return false;
       // Graph devolve "0001-01-01T..." quando não há aniversário cadastrado.
-      return !String(u.birthday).startsWith("0001");
+      if (String(u.birthday).startsWith("0001")) return false;
+      // MESMO filtro do diretório: só contas ATIVAS @trustsis.com. Sem isto, um GUEST
+      // @porttus.com (mesma pessoa que já é member @trustsis.com) entrava também e o
+      // colaborador aparecia DUPLICADO na lista de aniversariantes.
+      if (u.accountEnabled === false) return false;
+      const mail = String(u.mail ?? u.userPrincipalName ?? "").toLowerCase();
+      return mail.endsWith("@trustsis.com");
     });
     const list = await Promise.all(
       comData.map(async (u) => {

@@ -9,6 +9,7 @@ import { iniciais } from "@/lib/format";
 import { TIPO_PONTO_META, TIPO_PONTO_ORDEM, nomeDoMes } from "@/lib/gamification";
 import type { RankingEntry } from "@/lib/types";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
+import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
@@ -63,7 +64,7 @@ function Podio({ top, meUpn }: { top: RankingEntry[]; meUpn: string }) {
 }
 
 export default function RankingPage() {
-  const { me } = usePortal();
+  const { me, isAdmin } = usePortal();
   const meses = useMemo(() => ultimosMeses(), []);
   const [mes, setMes] = useState(meses[0]);
   const meUpn = (me?.email ?? "").toLowerCase();
@@ -217,6 +218,9 @@ export default function RankingPage() {
           </div>
         </>
       )}
+
+      {/* Auditoria de admin: extrato de pontos por dia (quem pontuou e como). */}
+      {isAdmin && <AtividadePontosAdmin mes={mes} />}
     </div>
   );
 }
