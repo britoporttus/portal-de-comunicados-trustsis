@@ -12,6 +12,7 @@ import { tempoRelativo, iniciais, CATEGORIA_META, PRIORIDADE_META } from "@/lib/
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { Lightbox } from "@/components/portal/Lightbox";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -546,19 +547,12 @@ export default function ComunicadosPage() {
         </div>
       </FormDialog>
 
-      {/* Lightbox de imagem */}
-      <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-        <DialogContent className="max-w-3xl border-none bg-transparent p-0 shadow-none">
-          <DialogTitle className="sr-only">Imagem do comunicado</DialogTitle>
-          {lightbox && (
-            <img
-              src={lightbox}
-              alt="Imagem do comunicado"
-              className="max-h-[85vh] w-full rounded-xl object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Lightbox de imagem (com zoom) */}
+      <Lightbox
+        src={lightbox}
+        alt="Imagem do comunicado"
+        onClose={() => setLightbox(null)}
+      />
 
       {/* Quem confirmou a leitura (visão admin) */}
       <Dialog open={!!verLeitores} onOpenChange={(o) => !o && setVerLeitores(null)}>

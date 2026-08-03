@@ -66,18 +66,20 @@ export default function ComunicadoDetalhePage() {
           )}
 
           {(c.imagens ?? []).length > 0 && (
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="mt-6 space-y-3">
               {(c.imagens ?? []).map((src, i) => (
                 <button
                   type="button"
                   key={i}
                   onClick={() => setLightbox(src)}
-                  className="overflow-hidden rounded-xl border border-border bg-secondary transition-opacity hover:opacity-90"
+                  className="block w-full cursor-zoom-in transition-opacity hover:opacity-90"
                 >
+                  {/* Mostra a imagem INTEIRA (object-contain, sem corte e sem cantos
+                      arredondados que "comiam" as bordas). Clique abre o zoom. */}
                   <img
                     src={src}
                     alt={`Imagem ${i + 1} do comunicado`}
-                    className="h-52 w-full object-cover"
+                    className="mx-auto block max-h-[75vh] w-auto max-w-full object-contain"
                   />
                 </button>
               ))}
