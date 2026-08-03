@@ -382,7 +382,8 @@ app.get("/api/tickets", async (req, res) => {
     const pendentes = meus.filter((t) => t.externoRef && !terminais.has(t.status));
     if (pendentes.length) {
       const updates = await Promise.all(
-        pendentes.map(async (t) => ({ id: t.id, upd: await sincronizarTicket(t.externoRef!) })),
+        // Sincroniza pelo ID do ticket no portal (o ITSM o guardou como externalRef).
+        pendentes.map(async (t) => ({ id: t.id, upd: await sincronizarTicket(t.id) })),
       );
       const mudou = updates.filter((u) => u.upd);
       if (mudou.length) {

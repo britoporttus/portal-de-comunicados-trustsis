@@ -18,29 +18,42 @@ import { config, itsmEnabled } from "./config.js";
 import type { Ticket, TicketTipo, TicketPrioridade, TicketStatus } from "./types.js";
 
 // ---- mapeamento de enums (portal <-> ITSM .NET) ----
-// ITSM TicketType: Incident=0, ServiceRequest=1  |  Priority: Low=0, Medium=1, High=2, Critical=3
-const TIPO_TO_ITSM: Record<TicketTipo, number> = { incidente: 0, requisicao: 1 };
-const PRIO_TO_ITSM: Record<TicketPrioridade, number> = { baixa: 0, media: 1, alta: 2, critica: 3 };
-
-// ITSM TicketStatus: New0 InProgress1 OnHold2 PendingApproval3 Approved4 Rejected5 Scheduled6
-// Implementing7 Resolved8 Reopened9 Closed10 Cancelled11 Failed12 -> subconjunto exposto no portal.
-const ITSM_TO_STATUS: Record<number, TicketStatus> = {
-  0: "aberto",
-  1: "em_andamento",
-  2: "aguardando",
-  3: "aguardando",
-  4: "em_andamento",
-  5: "cancelado",
-  6: "aguardando",
-  7: "em_andamento",
-  8: "resolvido",
-  9: "em_andamento",
-  10: "fechado",
-  11: "cancelado",
-  12: "cancelado",
+// O ITSM serializa E aceita os enums por NOME (JsonStringEnumConverter registrado no Program.cs do
+// ITSM). TicketType: Incident|ServiceRequest|Problem|Change  |  Priority: Low|Medium|High|Critical.
+const TIPO_TO_ITSM: Record<TicketTipo, string> = { incidente: "Incident", requisicao: "ServiceRequest" };
+const PRIO_TO_ITSM: Record<TicketPrioridade, string> = {
+  baixa: "Low",
+  media: "Medium",
+  alta: "High",
+  critica: "Critical",
 };
-export function statusDoItsm(n: number | undefined | null): TicketStatus {
-  return (n != null && ITSM_TO_STATUS[n]) || "aberto";
+
+// ITSM TicketStatus (por nome): New InProgress OnHold PendingApproval Approved Rejected Scheduled
+// Implementing Resolved Reopened Closed Cancelled Failed -> subconjunto exposto no portal.
+const ITSM_TO_STATUS: Record<string, TicketStatus> = {
+  New: "aberto",
+  InProgress: "em_andamento",
+  OnHold: "aguardando",
+  PendingApproval: "aguardando",
+  Approved: "em_andamento",
+  Rejected: "cancelado",
+  Scheduled: "aguardando",
+  Implementing: "em_andamento",
+  Resolved: "resolvido",
+  Reopened: "em_andamento",
+  Closed: "fechado",
+  Cancelled: "cancelado",
+  Failed: "cancelado",
+};
+// Mesma ordem dos enums do ITSM — tolera a serialização vir como índice numérico, se um dia mudar.
+const ITSM_STATUS_BY_INDEX: TicketStatus[] = [
+  "aberto", "em_andamento", "aguardando", "aguardando", "em_andamento", "cancelado",
+  "aguardando", "em_andamento", "resolvido", "em_andamento", "fechado", "cancelado", "cancelado",
+];
+export function statusDoItsm(s: string | number | undefined | null): TicketStatus {
+  if (typeof s === "string" && ITSM_TO_STATUS[s]) return ITSM_TO_STATUS[s];
+  if (typeof s === "number" && ITSM_STATUS_BY_INDEX[s]) return ITSM_STATUS_BY_INDEX[s];
+  return "aberto";
 }
 
 // ---- token app-only (client-credentials) para a API do ITSM ----
@@ -82,17 +95,22 @@ async function itsmFetch(pathAndQuery: string, init?: RequestInit): Promise<Resp
   });
 }
 
-// Corpo de criação no ITSM. Centralizado para alinhar com o contrato final do outro time.
+// Corpo de criação no ITSM — casa 1:1 com o DTO PortalCreateTicketRequest do ITSM
+// (Endpoints/PortalEndpoints.cs): campos PLANOS requesterUpn/requesterName (não aninhados).
 function montarCorpo(t: Ticket) {
   return {
     type: TIPO_TO_ITSM[t.tipo],
     title: t.titulo,
     description: t.descricao,
     priority: PRIO_TO_ITSM[t.prioridade],
-    // Idempotência: o ITSM deve deduplicar por externalRef (reenvio não cria duplicado).
+    // Idempotência: o ITSM deduplica por externalRef (reenvio não cria duplicado). Usamos o id do
+    // ticket no PORTAL como chave externa — é por ele que a sincronização (GET) busca depois.
     externalRef: t.id,
-    // O solicitante vem do PORTAL — o ITSM só lê (token app-only não carrega UPN).
-    requester: { upn: t.solicitante, nome: t.solicitanteNome },
+    // O solicitante vem do PORTAL — o ITSM só lê (token app-only não carrega UPN). Campos planos.
+    requesterUpn: t.solicitante,
+    requesterName: t.solicitanteNome,
+    // Origem: o ITSM persiste e roteia por Source (fila de chamados internos + regras da plataforma).
+    source: "portal",
   };
 }
 
@@ -108,10 +126,14 @@ export interface ResultadoItsm {
 export async function criarTicketNoItsm(t: Ticket): Promise<ResultadoItsm | null> {
   if (!itsmEnabled) return null;
   try {
-    const r = await itsmFetch("/api/tickets", { method: "POST", body: JSON.stringify(montarCorpo(t)) });
+    const r = await itsmFetch("/api/portal/tickets", {
+      method: "POST",
+      body: JSON.stringify(montarCorpo(t)),
+    });
+    // 201 = criado; 200 = idempotente (mesmo externalRef já existia). Ambos trazem o corpo.
     if (!r.ok) {
       const body = await r.text().catch(() => "");
-      console.warn(`[itsm] POST /api/tickets ${r.status}: ${body.slice(0, 300)}`);
+      console.warn(`[itsm] POST /api/portal/tickets ${r.status}: ${body.slice(0, 300)}`);
       return null;
     }
     const j: any = await r.json().catch(() => ({}));
@@ -121,7 +143,7 @@ export async function criarTicketNoItsm(t: Ticket): Promise<ResultadoItsm | null
       externoRef: String(ref),
       numero: typeof j?.number === "number" ? j.number : undefined,
       status: statusDoItsm(j?.status),
-      responsavel: j?.assigneeEmail || undefined,
+      responsavel: j?.assigneeEmail || j?.assigneeName || undefined,
     };
   } catch (e) {
     console.warn(`[itsm] falha ao criar ticket no ITSM: ${(e as Error).message}`);
@@ -129,21 +151,21 @@ export async function criarTicketNoItsm(t: Ticket): Promise<ResultadoItsm | null
   }
 }
 
-/** Atualiza (best-effort) o status/responsável de um ticket já sincronizado, buscando pela
- *  referência do ITSM. Retorna os campos atualizados ou `null` se off/falhar. */
-export async function sincronizarTicket(externoRef: string): Promise<Partial<ResultadoItsm> | null> {
-  if (!itsmEnabled || !externoRef) return null;
+/** Atualiza (best-effort) o status/responsável de um ticket já espelhado no ITSM. Busca pelo
+ *  `externalRef` — que é o ID do ticket no PORTAL (o mesmo enviado na criação), NÃO a referência
+ *  "INC-0042". O ITSM devolve UM ticket (ou 404). Retorna os campos ou `null` se off/falhar. */
+export async function sincronizarTicket(portalTicketId: string): Promise<Partial<ResultadoItsm> | null> {
+  if (!itsmEnabled || !portalTicketId) return null;
   try {
-    const q = `?search=${encodeURIComponent(externoRef)}&page=1&pageSize=1`;
-    const r = await itsmFetch(`/api/tickets${q}`, { method: "GET" });
-    if (!r.ok) return null;
-    const j: any = await r.json().catch(() => ({}));
-    const item = Array.isArray(j?.items) ? j.items[0] : undefined;
-    if (!item) return null;
+    const q = `?externalRef=${encodeURIComponent(portalTicketId)}`;
+    const r = await itsmFetch(`/api/portal/tickets${q}`, { method: "GET" });
+    if (!r.ok) return null; // 404 = ainda não espelhado / não encontrado
+    const item: any = await r.json().catch(() => ({}));
+    if (!item?.id) return null;
     return {
       status: statusDoItsm(item?.status),
       numero: typeof item?.number === "number" ? item.number : undefined,
-      responsavel: item?.assigneeEmail || undefined,
+      responsavel: item?.assigneeEmail || item?.assigneeName || undefined,
     };
   } catch {
     return null;
