@@ -137,6 +137,28 @@ export function perfilDeChave(chave: string): { nome: string; fotoUrl?: string; 
   return nomeDeUpn(chave, diretorio());
 }
 
+/** Chave canônica PÚBLICA — colapsa oid⇄e-mail da MESMA pessoa numa chave estável. Usada fora
+ *  do módulo para comparar identidades de forma consistente (ex.: filtrar os feedbacks
+ *  recebidos/enviados do usuário logado, cuja identidade oscila entre oid e e-mail por sessão). */
+export function canonizar(upn: string): string {
+  return chaveCanonica(upn, diretorio());
+}
+
+/** Reverte os pontos concedidos por UM feedback (de→para) num dia. Os pontos de feedback são
+ *  deduplicados por dia+contraparte (1 pontuação por par/dia), então o chamador só deve invocar
+ *  isto quando NÃO restar nenhum outro feedback daquele mesmo par (de→para) naquele dia — senão
+ *  removeria uma pontuação ainda justificada por outro feedback do dia. Passe `de`/`para` CRUS
+ *  (como gravados no feedback): o refId do dedup usa o valor cru; só o dono (upn) é canonizado. */
+export function reverterPontosFeedback(de: string, para: string, dia: string): void {
+  const dir = diretorio();
+  const dedupRecebido = `${chaveCanonica(para, dir)}|feedback_recebido|${de}|${dia}`;
+  const dedupEnviado = `${chaveCanonica(de, dir)}|feedback_enviado|${para}|${dia}`;
+  mutate((s) => {
+    if (!s.pontos) return;
+    s.pontos = s.pontos.filter((p) => p.dedup !== dedupRecebido && p.dedup !== dedupEnviado);
+  });
+}
+
 export interface RankingEntry {
   upn: string;
   nome: string;

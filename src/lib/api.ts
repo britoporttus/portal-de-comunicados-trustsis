@@ -126,5 +126,10 @@ export const api = {
       req<Feedback>(comUpn("/feedbacks", upn), { method: "POST", body: JSON.stringify(b) }).then(
         (r) => (emitirPontosMudou(), r),
       ),
+    // ADMIN: apaga um feedback (o backend valida o papel) e reverte os pontos vinculados.
+    remove: (id: string, upn?: string) =>
+      req<{ ok: boolean; pontosRevertidos: boolean }>(comUpn(`/feedbacks/${id}`, upn), {
+        method: "DELETE",
+      }).then((r) => (emitirPontosMudou(), r)),
   },
 };

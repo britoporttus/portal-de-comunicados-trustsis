@@ -10,6 +10,7 @@ import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDai
 import { requireAuth, authRequired } from "./auth.js";
 import {
   registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave, atividadeDiaria,
+  canonizar, reverterPontosFeedback,
 } from "./pontos.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
@@ -290,10 +291,14 @@ app.get("/api/feedbacks", (req, res) => {
   const todos = [...(getStore().feedbacks ?? [])]
     .sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm))
     .map(enriquecer);
+  // Compara por CHAVE CANÔNICA (colapsa oid⇄e-mail): a identidade do usuário logado oscila
+  // entre o oid (GUID) e o e-mail conforme a sessão, e o feedback foi gravado com uma delas.
+  // Sem canonizar, "Recebidos"/"Enviados" ficavam VAZIOS quando as duas chaves não batiam.
+  const eu = canonizar(upn);
   res.json({
     recentes: todos.slice(0, 50),
-    recebidos: upn ? todos.filter((f) => f.para === upn) : [],
-    enviados: upn ? todos.filter((f) => f.de === upn) : [],
+    recebidos: eu ? todos.filter((f) => canonizar(f.para) === eu) : [],
+    enviados: eu ? todos.filter((f) => canonizar(f.de) === eu) : [],
   });
 });
 
@@ -327,6 +332,29 @@ app.post("/api/feedbacks", (req, res) => {
   registrarPonto(para, "feedback_recebido", de);
   registrarPonto(de, "feedback_enviado", para);
   res.status(201).json(item);
+});
+
+// ADMIN: apaga um feedback e REVERTE os pontos vinculados a ele. Como os pontos de feedback são
+// deduplicados por dia+contraparte (1 pontuação por par/dia), só revertemos quando NÃO sobrar
+// nenhum outro feedback do MESMO par (de→para) no MESMO dia — senão a pontuação ainda é devida.
+app.delete("/api/feedbacks/:id", async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const perfil = await getProfile(upn);
+  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores podem apagar feedbacks" });
+
+  const alvo = (getStore().feedbacks ?? []).find((f) => f.id === req.params.id);
+  if (!alvo) return res.status(404).json({ error: "feedback não encontrado" });
+
+  mutate((s) => {
+    s.feedbacks = (s.feedbacks ?? []).filter((f) => f.id !== alvo.id);
+  });
+
+  const dia = alvo.criadoEm.slice(0, 10);
+  const sobra = (getStore().feedbacks ?? []).some(
+    (f) => f.de === alvo.de && f.para === alvo.para && f.criadoEm.slice(0, 10) === dia,
+  );
+  if (!sobra) reverterPontosFeedback(alvo.de, alvo.para, dia);
+  res.json({ ok: true, pontosRevertidos: !sobra });
 });
 
 // ---------- estático (produção): serve o SPA buildado no MESMO origin da API ----------

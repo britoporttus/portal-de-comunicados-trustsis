@@ -1,7 +1,7 @@
 // Aba de Feedback (gamificação): envie um reconhecimento a um colega e acompanhe o que
 // você recebeu/enviou, além do mural recente. Receber feedback rende pontos no ranking.
 import { useMemo, useRef, useState } from "react";
-import { MessageSquareHeart, Send, Inbox, Heart, Users } from "lucide-react";
+import { MessageSquareHeart, Send, Inbox, Heart, Users, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Pessoa, Feedback } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
@@ -107,9 +107,26 @@ function FotoMini({ nome, foto, className }: { nome: string; foto?: string; clas
   );
 }
 
-function CartaoFeedback({ f, tipo }: { f: Feedback; tipo: "recebido" | "enviado" | "mural" }) {
+function CartaoFeedback({
+  f, tipo, onDelete,
+}: {
+  f: Feedback;
+  tipo: "recebido" | "enviado" | "mural";
+  onDelete?: (f: Feedback) => void;
+}) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="group relative rounded-xl border border-border bg-card p-4 shadow-sm">
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(f)}
+          aria-label="Apagar feedback"
+          title="Apagar feedback (reverte os pontos)"
+          className="absolute right-2 top-2 grid size-7 place-items-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      )}
       {tipo === "mural" ? (
         // Mural: rosto de quem enviou → rosto de quem recebeu.
         <div className="flex items-center gap-2">
@@ -141,10 +158,25 @@ function CartaoFeedback({ f, tipo }: { f: Feedback; tipo: "recebido" | "enviado"
 }
 
 export default function FeedbackPage() {
-  const { me } = usePortal();
+  const { me, isAdmin } = usePortal();
   const meUpn = (me?.email ?? "").toLowerCase();
   const { data: org } = useAsync(() => api.org());
   const { data, loading, reload } = useAsync(() => api.feedbacks.list(me?.email), [me?.email]);
+
+  // ADMIN: apagar um feedback também reverte os pontos que ele concedeu (backend valida o papel).
+  const [apagando, setApagando] = useState<string | null>(null);
+  const apagar = async (f: Feedback) => {
+    if (apagando) return;
+    if (!window.confirm(`Apagar o feedback de ${f.deNome} para ${f.paraNome}? Os pontos concedidos por ele serão revertidos.`)) return;
+    setApagando(f.id);
+    try {
+      await api.feedbacks.remove(f.id, me?.email);
+      await reload();
+    } finally {
+      setApagando(null);
+    }
+  };
+  const onDelete = isAdmin ? apagar : undefined;
 
   const pessoas = useMemo(
     () => (org?.diretorio ?? []).filter((p) => p.email && p.email.toLowerCase() !== meUpn),
@@ -244,7 +276,7 @@ export default function FeedbackPage() {
             <EmptyState icon={Inbox} title="Nenhum feedback recebido ainda" description="Quando um colega te reconhecer, aparece aqui — e vira ponto." />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {recebidos.map((f) => <CartaoFeedback key={f.id} f={f} tipo="recebido" />)}
+              {recebidos.map((f) => <CartaoFeedback key={f.id} f={f} tipo="recebido" onDelete={onDelete} />)}
             </div>
           )}
         </TabsContent>
@@ -256,7 +288,7 @@ export default function FeedbackPage() {
             <EmptyState icon={Send} title="Você ainda não enviou feedbacks" description="Reconhecer o time é um bom hábito. Comece agora!" />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {enviados.map((f) => <CartaoFeedback key={f.id} f={f} tipo="enviado" />)}
+              {enviados.map((f) => <CartaoFeedback key={f.id} f={f} tipo="enviado" onDelete={onDelete} />)}
             </div>
           )}
         </TabsContent>
@@ -268,7 +300,7 @@ export default function FeedbackPage() {
             <EmptyState icon={Users} title="Mural vazio" description="Os feedbacks públicos mais recentes aparecem aqui." />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {recentes.map((f) => <CartaoFeedback key={f.id} f={f} tipo="mural" />)}
+              {recentes.map((f) => <CartaoFeedback key={f.id} f={f} tipo="mural" onDelete={onDelete} />)}
             </div>
           )}
         </TabsContent>
