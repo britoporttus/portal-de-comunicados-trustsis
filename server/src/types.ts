@@ -96,6 +96,41 @@ export interface Feedback {
   paraFoto?: string;
 }
 
+// ---- Tickets / chamados (integração futura com a plataforma trustsis-itsm) ----
+// O portal é o BALCÃO de abertura + acompanhamento: cada usuário abre e vê os SEUS chamados.
+// A gestão detalhada (workflow, SLA, atribuição de técnico) roda no trustsis-itsm; os status
+// e prioridades abaixo espelham o enum do ITSM (.NET) para o dia da sincronização ser trivial.
+//   ITSM TicketStatus: New(0) InProgress(1) OnHold(2) Resolved(8) Closed(10) Cancelled(11)
+export type TicketStatus =
+  | "aberto"        // New
+  | "em_andamento"  // InProgress
+  | "aguardando"    // OnHold
+  | "resolvido"     // Resolved
+  | "fechado"       // Closed
+  | "cancelado";    // Cancelled
+/** ITSM Priority: Low(0) Medium(1) High(2) Critical(3). */
+export type TicketPrioridade = "baixa" | "media" | "alta" | "critica";
+/** ITSM TicketType (subconjunto exposto no portal): Incident(0), ServiceRequest(1). */
+export type TicketTipo = "incidente" | "requisicao";
+
+export interface Ticket {
+  id: string;
+  numero: number;            // sequencial legível (ex.: #1042)
+  titulo: string;            // "nome" do chamado
+  descricao: string;
+  tipo: TicketTipo;
+  prioridade: TicketPrioridade;
+  status: TicketStatus;
+  solicitante: string;       // upn/e-mail de quem abriu (separa os tickets por usuário)
+  solicitanteNome: string;
+  responsavel?: string;      // nome do responsável (assignee) — vazio = aguardando triagem
+  criadoEm: string;          // ISO — "data de início"
+  atualizadoEm?: string;     // ISO
+  // Referência no trustsis-itsm (ex.: "INC-0042") quando o chamado for sincronizado com a
+  // plataforma de gestão. Enquanto a integração não está ativa, permanece vazio.
+  externoRef?: string;
+}
+
 export interface Store {
   comunicados: Comunicado[];
   eventos: Evento[];
@@ -107,6 +142,8 @@ export interface Store {
   // Gamificação: ledger de pontos e feedbacks entre colegas.
   pontos?: PontoEvento[];
   feedbacks?: Feedback[];
+  // Tickets abertos pelos colaboradores (opcional → produção não reseta ao subir o campo).
+  tickets?: Ticket[];
 }
 
 // ---- Graph / pessoas ----

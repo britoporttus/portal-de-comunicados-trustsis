@@ -14,6 +14,7 @@ import {
 } from "./pontos.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
+  Ticket, TicketTipo, TicketPrioridade,
 } from "./types.js";
 
 const app = express();
@@ -355,6 +356,57 @@ app.delete("/api/feedbacks/:id", async (req, res) => {
   );
   if (!sobra) reverterPontosFeedback(alvo.de, alvo.para, dia);
   res.json({ ok: true, pontosRevertidos: !sobra });
+});
+
+// ---------- Tickets / chamados (em construção — integração futura com trustsis-itsm) ----------
+// Balcão de abertura + acompanhamento: cada usuário abre e vê SÓ os seus chamados. A gestão
+// detalhada (workflow, SLA, atribuição) será feita na plataforma trustsis-itsm; quando a API
+// dela estiver acessível, sincronizamos por Ticket.externoRef (ver server/src/types.ts).
+const TICKET_PRIOS: TicketPrioridade[] = ["baixa", "media", "alta", "critica"];
+
+// "Meus tickets": lista os chamados do usuário atual (separados por solicitante). Usa a chave
+// CANÔNICA (colapsa oid⇄e-mail) porque a identidade oscila entre GUID e e-mail conforme a sessão.
+app.get("/api/tickets", (req, res) => {
+  const eu = canonizar(upnDaRequisicao(req));
+  const todos = [...(getStore().tickets ?? [])].sort(
+    (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
+  );
+  res.json(eu ? todos.filter((t) => canonizar(t.solicitante) === eu) : []);
+});
+
+// Abre um novo chamado. O servidor fixa status "aberto" e a data de início; o corpo só traz
+// título, descrição, tipo e prioridade. O solicitante vem da identidade da requisição.
+app.post("/api/tickets", (req, res) => {
+  const solicitante = upnDaRequisicao(req);
+  if (!solicitante) return res.status(400).json({ error: "solicitante não identificado" });
+  const titulo = String(req.body?.titulo || "").trim();
+  const descricao = String(req.body?.descricao || "").trim();
+  if (!titulo) return res.status(400).json({ error: "título obrigatório" });
+
+  const tipo: TicketTipo = req.body?.tipo === "requisicao" ? "requisicao" : "incidente";
+  const prioridade: TicketPrioridade = TICKET_PRIOS.includes(req.body?.prioridade)
+    ? (req.body.prioridade as TicketPrioridade)
+    : "media";
+
+  const item = mutate((s) => {
+    if (!s.tickets) s.tickets = [];
+    const numero = s.tickets.reduce((m, t) => Math.max(m, t.numero || 0), 1000) + 1;
+    const t: Ticket = {
+      id: newId("tkt"),
+      numero,
+      titulo: titulo.slice(0, 160),
+      descricao: descricao.slice(0, 4000),
+      tipo,
+      prioridade,
+      status: "aberto",
+      solicitante,
+      solicitanteNome: String(req.body?.solicitanteNome || solicitante.split("@")[0] || "Colaborador"),
+      criadoEm: new Date().toISOString(),
+    };
+    s.tickets.unshift(t);
+    return t;
+  });
+  res.status(201).json(item);
 });
 
 // ---------- estático (produção): serve o SPA buildado no MESMO origin da API ----------

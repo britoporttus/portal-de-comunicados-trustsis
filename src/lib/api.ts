@@ -3,7 +3,7 @@ import type {
   Me, AgendaItem, OrgNode, Ausencia,
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
-  AtividadeDia,
+  AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -131,5 +131,15 @@ export const api = {
       req<{ ok: boolean; pontosRevertidos: boolean }>(comUpn(`/feedbacks/${id}`, upn), {
         method: "DELETE",
       }).then((r) => (emitirPontosMudou(), r)),
+  },
+
+  // ---- Tickets / chamados (em construção: integração futura com trustsis-itsm) ----
+  tickets: {
+    // "Meus tickets": o backend filtra pelos chamados do usuário atual (por solicitante).
+    list: (upn?: string) => req<Ticket[]>(comUpn("/tickets", upn)),
+    create: (
+      b: { titulo: string; descricao: string; tipo: TicketTipo; prioridade: TicketPrioridade; solicitanteNome: string },
+      upn?: string,
+    ) => req<Ticket>(comUpn("/tickets", upn), { method: "POST", body: JSON.stringify(b) }),
   },
 };

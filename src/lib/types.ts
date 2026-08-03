@@ -172,3 +172,25 @@ export interface FeedbacksResposta {
   recebidos: Feedback[];
   enviados: Feedback[];
 }
+
+// ---- Tickets / chamados (integração futura com trustsis-itsm) ----
+export type TicketStatus =
+  | "aberto" | "em_andamento" | "aguardando" | "resolvido" | "fechado" | "cancelado";
+export type TicketPrioridade = "baixa" | "media" | "alta" | "critica";
+export type TicketTipo = "incidente" | "requisicao";
+
+export interface Ticket {
+  id: string;
+  numero: number;
+  titulo: string;
+  descricao: string;
+  tipo: TicketTipo;
+  prioridade: TicketPrioridade;
+  status: TicketStatus;
+  solicitante: string;
+  solicitanteNome: string;
+  responsavel?: string;
+  criadoEm: string;
+  atualizadoEm?: string;
+  externoRef?: string;
+}
