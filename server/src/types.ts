@@ -151,15 +151,18 @@ export interface Reporte {
 }
 
 // ---- Políticas de utilização interna ----
-// Documentos internos (código de conduta, uso de e-mail, segurança…) publicados pelo admin
-// e visíveis a todos. Conteúdo é texto simples (quebras de linha preservadas na exibição).
-export interface Politica {
+// NÃO são cadastradas no portal: são os DOCUMENTOS reais compartilhados com todos os
+// colaboradores numa pasta do SharePoint/OneDrive. O portal só LISTA (read-only) o conteúdo
+// dessa pasta via Microsoft Graph e abre cada arquivo no SharePoint. Cada subpasta vira uma
+// categoria; arquivos na raiz caem em "Geral".
+export interface PoliticaDoc {
   id: string;
-  titulo: string;
-  conteudo: string;
-  categoria?: string; // agrupador opcional (ex.: "Segurança", "RH")
-  ordem?: number; // ordenação manual (asc); vazio = 0
-  atualizadoEm: string; // ISO
+  nome: string; // nome do arquivo
+  categoria?: string; // subpasta (ex.: "RH", "Segurança") ou "Geral"
+  tipo?: string; // rótulo amigável do formato (PDF, Word, Excel…)
+  tamanho?: number; // bytes
+  atualizadoEm?: string; // ISO — última modificação no SharePoint
+  webUrl: string; // link para abrir/baixar o documento no SharePoint/OneDrive
 }
 
 export interface Store {
@@ -175,9 +178,8 @@ export interface Store {
   feedbacks?: Feedback[];
   // Tickets abertos pelos colaboradores (opcional → produção não reseta ao subir o campo).
   tickets?: Ticket[];
-  // Feedback do portal (bugs/melhorias) e políticas internas (opcionais → prod não reseta).
+  // Feedback do portal (bugs/melhorias). Políticas NÃO ficam no store: vêm do SharePoint.
   reportes?: Reporte[];
-  politicas?: Politica[];
 }
 
 // ---- Graph / pessoas ----

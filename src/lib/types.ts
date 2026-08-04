@@ -213,11 +213,14 @@ export interface Reporte {
 }
 
 // ---- Políticas de utilização interna ----
-export interface Politica {
+// Documentos compartilhados numa pasta do SharePoint/OneDrive (read-only). Cada subpasta
+// vira uma categoria; arquivos na raiz caem em "Geral".
+export interface PoliticaDoc {
   id: string;
-  titulo: string;
-  conteudo: string;
+  nome: string;
   categoria?: string;
-  ordem?: number;
-  atualizadoEm: string;
+  tipo?: string; // rótulo do formato (PDF, Word…)
+  tamanho?: number; // bytes
+  atualizadoEm?: string; // ISO
+  webUrl: string; // abrir/baixar no SharePoint
 }

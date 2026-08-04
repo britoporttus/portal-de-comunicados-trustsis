@@ -16,6 +16,12 @@ export const config = {
     apiScope: process.env.ITSM_API_SCOPE ?? "",                     // ex.: api://<client-id-itsm>/.default
     tenantSubdomain: process.env.ITSM_TENANT_SUBDOMAIN ?? "trustsis",
   },
+  // Políticas internas: link de COMPARTILHAMENTO da pasta do SharePoint/OneDrive onde os
+  // documentos são compartilhados com todos os colaboradores. O portal apenas LISTA e abre
+  // esses arquivos (read-only) via Graph. Vazio => página cai em modo demo/vazia.
+  politicas: {
+    shareUrl: process.env.POLITICAS_SHARE_URL ?? "",
+  },
 };
 
 // Graph só é usado quando as 3 credenciais existem. Sem elas => MODO DEMO (dados de exemplo).

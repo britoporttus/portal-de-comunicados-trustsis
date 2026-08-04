@@ -3,8 +3,8 @@
 // para que o portal continue funcionando no preview.
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { config, graphEnabled } from "./config.js";
-import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante } from "./types.js";
-import { mockPeople, mockAgenda, mockOrg, mockVacations } from "./mock.js";
+import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante, PoliticaDoc } from "./types.js";
+import { mockPeople, mockAgenda, mockOrg, mockVacations, mockPoliticas } from "./mock.js";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -435,6 +435,104 @@ export async function getDepartments(): Promise<string[]> {
     return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
   } catch (e) {
     console.warn("[graph] getDepartments falhou:", (e as Error).message);
+    return [];
+  }
+}
+
+// ---------- Políticas internas (documentos do SharePoint/OneDrive) ----------
+// As políticas NÃO são cadastradas no portal: são os arquivos reais compartilhados com
+// todos os colaboradores numa pasta do SharePoint/OneDrive. O portal apenas LISTA essa
+// pasta via Graph (`/shares`) e abre cada documento. Requer a permissão de aplicação
+// Sites.Read.All (ou Files.Read.All) concedida ao app-only, além de POLITICAS_SHARE_URL.
+
+/** Codifica uma URL de compartilhamento para o formato de shareId do Graph (`u!...`). */
+function encodeShareUrl(url: string): string {
+  const b64 = Buffer.from(url, "utf8").toString("base64");
+  return "u!" + b64.replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+}
+
+/** Rótulo amigável do tipo de arquivo a partir da extensão. */
+function tipoDoArquivo(nome: string): string {
+  const ext = (nome.split(".").pop() || "").toLowerCase();
+  const map: Record<string, string> = {
+    pdf: "PDF", doc: "Word", docx: "Word", xls: "Excel", xlsx: "Excel",
+    ppt: "PowerPoint", pptx: "PowerPoint", txt: "Texto", rtf: "Texto",
+    png: "Imagem", jpg: "Imagem", jpeg: "Imagem", gif: "Imagem",
+    zip: "Arquivo", one: "OneNote",
+  };
+  return map[ext] ?? (ext ? ext.toUpperCase() : "Arquivo");
+}
+
+/** Lista os filhos de um driveItem (paginando), já filtrando o essencial. */
+async function driveChildren(driveId: string, itemId: string): Promise<any[]> {
+  const out: any[] = [];
+  let next: string | null =
+    `${GRAPH}/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/children` +
+    `?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder&$top=200`;
+  let guard = 0;
+  while (next && guard < 20) {
+    const res: { value: any[]; "@odata.nextLink"?: string } = await graphGetUrl(next);
+    out.push(...res.value);
+    next = res["@odata.nextLink"] ?? null;
+    guard++;
+  }
+  return out;
+}
+
+function mapDoc(f: any, categoria?: string): PoliticaDoc {
+  return {
+    id: f.id,
+    nome: f.name ?? "documento",
+    categoria: categoria || "Geral",
+    tipo: tipoDoArquivo(f.name ?? ""),
+    tamanho: typeof f.size === "number" ? f.size : undefined,
+    atualizadoEm: f.lastModifiedDateTime || undefined,
+    webUrl: f.webUrl ?? "",
+  };
+}
+
+/** Documentos de política vindos da pasta compartilhada do SharePoint/OneDrive.
+ *  Cada SUBPASTA (1 nível) vira uma categoria; arquivos na raiz caem em "Geral".
+ *  Sem Graph => docs DEMO (preview navegável). Com Graph mas sem POLITICAS_SHARE_URL
+ *  configurada => lista vazia (a página mostra o aviso de configuração). */
+export async function getPoliticas(): Promise<PoliticaDoc[]> {
+  if (!graphEnabled) return mockPoliticas();
+  if (!config.politicas.shareUrl) return [];
+  try {
+    const shareId = encodeShareUrl(config.politicas.shareUrl);
+    const root = await graphGet<any>(`/shares/${shareId}/driveItem?$select=id,parentReference`);
+    const driveId: string | undefined = root?.parentReference?.driveId;
+    const rootId: string | undefined = root?.id;
+    if (!driveId || !rootId) return [];
+
+    const top = await driveChildren(driveId, rootId);
+    const docs: PoliticaDoc[] = [];
+    const subpastas: any[] = [];
+    for (const item of top) {
+      if (item.folder) subpastas.push(item);
+      else if (item.file) docs.push(mapDoc(item));
+    }
+    // Um nível de subpastas em paralelo (cada uma vira categoria).
+    const porPasta = await Promise.all(
+      subpastas.map(async (p) => {
+        try {
+          const filhos = await driveChildren(driveId, p.id);
+          return filhos.filter((f) => f.file).map((f) => mapDoc(f, p.name));
+        } catch {
+          return [] as PoliticaDoc[];
+        }
+      }),
+    );
+    for (const arr of porPasta) docs.push(...arr);
+
+    docs.sort(
+      (a, b) =>
+        (a.categoria ?? "").localeCompare(b.categoria ?? "", "pt-BR") ||
+        a.nome.localeCompare(b.nome, "pt-BR"),
+    );
+    return docs;
+  } catch (e) {
+    console.warn("[graph] getPoliticas falhou:", (e as Error).message);
     return [];
   }
 }

@@ -1,6 +1,6 @@
 // Dados DEMO para pessoas/agenda/organograma/ausências — usados quando o Graph não
 // está configurado. Mantém o portal totalmente navegável sem Entra.
-import type { Pessoa, AgendaItem, Ausencia, OrgNode } from "./types.js";
+import type { Pessoa, AgendaItem, Ausencia, OrgNode, PoliticaDoc } from "./types.js";
 
 export const mockPeople: Pessoa[] = [
   { id: "u_joao", nome: "João Ribeiro", cargo: "Analista de Sistemas", area: "Tecnologia", email: "joao.ribeiro@trustsis.com.br", telefone: "+55 11 99999-0001", managerId: "u_ana" },
@@ -41,5 +41,17 @@ export function mockVacations(): Ausencia[] {
   return [
     { pessoa: mockPeople[2], mensagem: "Em férias, retorno em breve. Para urgências, falar com a equipe.", ate: iso(6, 18) },
     { pessoa: mockPeople[3], mensagem: "Ausente por motivo de folga. Retorno amanhã.", ate: iso(1, 18) },
+  ];
+}
+
+// Documentos de política DEMO — simulam os arquivos que viriam da pasta compartilhada do
+// SharePoint. Usados no preview/sem Graph para a página ficar navegável. webUrl é fictício.
+export function mockPoliticas(): PoliticaDoc[] {
+  return [
+    { id: "d1", nome: "Código de Conduta.pdf", categoria: "Geral", tipo: "PDF", tamanho: 482_000, atualizadoEm: iso(-20, 12), webUrl: "https://sharepoint.com" },
+    { id: "d2", nome: "Política de Segurança da Informação.pdf", categoria: "Segurança", tipo: "PDF", tamanho: 731_000, atualizadoEm: iso(-45, 12), webUrl: "https://sharepoint.com" },
+    { id: "d3", nome: "Uso Aceitável de E-mail e Internet.docx", categoria: "Segurança", tipo: "Word", tamanho: 96_000, atualizadoEm: iso(-12, 12), webUrl: "https://sharepoint.com" },
+    { id: "d4", nome: "Manual do Colaborador.pdf", categoria: "RH", tipo: "PDF", tamanho: 1_240_000, atualizadoEm: iso(-60, 12), webUrl: "https://sharepoint.com" },
+    { id: "d5", nome: "Política de Home Office.pdf", categoria: "RH", tipo: "PDF", tamanho: 210_000, atualizadoEm: iso(-8, 12), webUrl: "https://sharepoint.com" },
   ];
 }

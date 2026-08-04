@@ -4,7 +4,7 @@ import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
-  Reporte, ReporteTipo, ReporteStatus, Politica,
+  Reporte, ReporteTipo, ReporteStatus, PoliticaDoc,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -159,13 +159,8 @@ export const api = {
       req<void>(comUpn(`/reportes/${id}`, upn), { method: "DELETE" }),
   },
 
-  // ---- Políticas de utilização interna (admin edita; todos leem) ----
+  // ---- Políticas de utilização interna (documentos do SharePoint, read-only) ----
   politicas: {
-    list: () => req<Politica[]>("/politicas"),
-    create: (b: Partial<Politica>) =>
-      req<Politica>("/politicas", { method: "POST", body: JSON.stringify({ ...b, atualizadoEm: new Date().toISOString() }) }),
-    update: (id: string, b: Partial<Politica>) =>
-      req<Politica>(`/politicas/${id}`, { method: "PUT", body: JSON.stringify({ ...b, atualizadoEm: new Date().toISOString() }) }),
-    remove: (id: string) => req<void>(`/politicas/${id}`, { method: "DELETE" }),
+    list: () => req<PoliticaDoc[]>("/politicas"),
   },
 };

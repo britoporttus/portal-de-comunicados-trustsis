@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, isGraphOn } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn } from "./graph.js";
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
 import {
@@ -15,7 +15,7 @@ import {
 import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
-  Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus, Politica,
+  Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus,
 } from "./types.js";
 
 const app = express();
@@ -84,7 +84,7 @@ app.get("/api/departamentos", async (_req, res) => {
 // ---------- CRUD genérico do store ----------
 function crud<T extends { id: string }>(
   path: string,
-  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social" | "politicas",
+  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social",
   idPrefix: string,
   sort?: (a: T, b: T) => number,
   skipList = false,
@@ -240,11 +240,15 @@ app.delete("/api/links/:id", (req, res) => {
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
 
 // ---------- Políticas de utilização interna ----------
-// CRUD genérico (admin cria/edita; todos leem). Ordenadas por `ordem` (asc) e, como
-// desempate, pela última atualização. O front carimba `atualizadoEm` no create/update.
-crud<Politica>("politicas", "politicas", "pol", (a, b) =>
-  (a.ordem ?? 0) - (b.ordem ?? 0) || +new Date(a.atualizadoEm) - +new Date(b.atualizadoEm),
-);
+// NÃO são cadastradas no portal: são os documentos compartilhados com todos os colaboradores
+// numa pasta do SharePoint/OneDrive. Read-only — o portal só lista e abre os arquivos (Graph).
+app.get("/api/politicas", async (_req, res) => {
+  try {
+    res.json(await getPoliticas());
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
 
 // ---------- Feedback do portal (bug / melhoria / outro) ----------
 // Reporte sobre a PRÓPRIA aplicação. O autor vê os seus; o admin vê e gerencia todos.
