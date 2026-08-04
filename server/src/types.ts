@@ -131,6 +131,37 @@ export interface Ticket {
   externoRef?: string;
 }
 
+// ---- Feedback do portal (bug / melhoria / outro) sobre a PRÓPRIA aplicação ----
+// Distinto do Feedback entre colegas (elogios): aqui o colaborador reporta um problema
+// da ferramenta ou sugere uma melhoria. Só o autor vê os seus; o admin vê e gerencia todos.
+export type ReporteTipo = "bug" | "melhoria" | "outro";
+export type ReporteStatus = "aberto" | "em_analise" | "resolvido" | "arquivado";
+
+export interface Reporte {
+  id: string;
+  tipo: ReporteTipo;
+  titulo: string;
+  mensagem: string;
+  pagina?: string; // rota/tela onde ocorreu (opcional)
+  de: string; // upn/e-mail de quem reportou
+  deNome: string;
+  status: ReporteStatus;
+  criadoEm: string; // ISO
+  atualizadoEm?: string; // ISO
+}
+
+// ---- Políticas de utilização interna ----
+// Documentos internos (código de conduta, uso de e-mail, segurança…) publicados pelo admin
+// e visíveis a todos. Conteúdo é texto simples (quebras de linha preservadas na exibição).
+export interface Politica {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  categoria?: string; // agrupador opcional (ex.: "Segurança", "RH")
+  ordem?: number; // ordenação manual (asc); vazio = 0
+  atualizadoEm: string; // ISO
+}
+
 export interface Store {
   comunicados: Comunicado[];
   eventos: Evento[];
@@ -144,6 +175,9 @@ export interface Store {
   feedbacks?: Feedback[];
   // Tickets abertos pelos colaboradores (opcional → produção não reseta ao subir o campo).
   tickets?: Ticket[];
+  // Feedback do portal (bugs/melhorias) e políticas internas (opcionais → prod não reseta).
+  reportes?: Reporte[];
+  politicas?: Politica[];
 }
 
 // ---- Graph / pessoas ----

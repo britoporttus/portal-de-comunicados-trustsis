@@ -107,7 +107,7 @@ export default function HomePage() {
               <LinhaVazia texto="Nenhum comunicado publicado." />
             ) : (
               <ul className="divide-y divide-border">
-                {(comunicados.data ?? []).slice(0, 5).map((c) => (
+                {(comunicados.data ?? []).slice(0, 3).map((c) => (
                   <li key={c.id} className="first:pt-0 last:pb-0">
                     <Link
                       to={`/comunicados/${c.id}`}

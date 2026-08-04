@@ -4,6 +4,7 @@ import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
+  Reporte, ReporteTipo, ReporteStatus, Politica,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -141,5 +142,30 @@ export const api = {
       b: { titulo: string; descricao: string; tipo: TicketTipo; prioridade: TicketPrioridade; solicitanteNome: string },
       upn?: string,
     ) => req<Ticket>(comUpn("/tickets", upn), { method: "POST", body: JSON.stringify(b) }),
+  },
+
+  // ---- Feedback do portal (bug / melhoria / outro sobre a aplicação) ----
+  reportes: {
+    // Admin recebe todos; colaborador recebe só os seus (o backend decide pelo papel).
+    list: (upn?: string) => req<Reporte[]>(comUpn("/reportes", upn)),
+    create: (
+      b: { tipo: ReporteTipo; titulo: string; mensagem: string; pagina?: string; deNome: string },
+      upn?: string,
+    ) => req<Reporte>(comUpn("/reportes", upn), { method: "POST", body: JSON.stringify(b) }),
+    // ADMIN: muda o status (triagem/andamento/resolução).
+    updateStatus: (id: string, status: ReporteStatus, upn?: string) =>
+      req<Reporte>(comUpn(`/reportes/${id}`, upn), { method: "PUT", body: JSON.stringify({ status }) }),
+    remove: (id: string, upn?: string) =>
+      req<void>(comUpn(`/reportes/${id}`, upn), { method: "DELETE" }),
+  },
+
+  // ---- Políticas de utilização interna (admin edita; todos leem) ----
+  politicas: {
+    list: () => req<Politica[]>("/politicas"),
+    create: (b: Partial<Politica>) =>
+      req<Politica>("/politicas", { method: "POST", body: JSON.stringify({ ...b, atualizadoEm: new Date().toISOString() }) }),
+    update: (id: string, b: Partial<Politica>) =>
+      req<Politica>(`/politicas/${id}`, { method: "PUT", body: JSON.stringify({ ...b, atualizadoEm: new Date().toISOString() }) }),
+    remove: (id: string) => req<void>(`/politicas/${id}`, { method: "DELETE" }),
   },
 };

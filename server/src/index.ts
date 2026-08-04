@@ -15,7 +15,7 @@ import {
 import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
-  Ticket, TicketTipo, TicketPrioridade,
+  Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus, Politica,
 } from "./types.js";
 
 const app = express();
@@ -84,32 +84,36 @@ app.get("/api/departamentos", async (_req, res) => {
 // ---------- CRUD genérico do store ----------
 function crud<T extends { id: string }>(
   path: string,
-  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social",
+  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social" | "politicas",
   idPrefix: string,
   sort?: (a: T, b: T) => number,
   skipList = false,
 ) {
   if (!skipList) {
     app.get(`/api/${path}`, (_req, res) => {
-      const list = [...(getStore()[key] as unknown as T[])];
+      // key opcional (ex.: politicas) pode faltar num store persistido antigo → [] seguro.
+      const list = [...((getStore()[key] as unknown as T[] | undefined) ?? [])];
       if (sort) list.sort(sort);
       res.json(list);
     });
   }
   // GET por id — usado pelas páginas de detalhe (comunicado/evento completo).
   app.get(`/api/${path}/:id`, (req, res) => {
-    const item = (getStore()[key] as unknown as T[]).find((x) => x.id === req.params.id);
+    const item = ((getStore()[key] as unknown as T[] | undefined) ?? []).find((x) => x.id === req.params.id);
     if (!item) return res.status(404).json({ error: "não encontrado" });
     res.json(item);
   });
   app.post(`/api/${path}`, (req, res) => {
     const item = { ...req.body, id: newId(idPrefix) } as T;
-    mutate((s) => (s[key] as unknown as T[]).unshift(item));
+    mutate((s) => {
+      const arr = (s[key] as unknown as T[] | undefined) ?? ((s[key] as unknown as T[]) = []);
+      arr.unshift(item);
+    });
     res.status(201).json(item);
   });
   app.put(`/api/${path}/:id`, (req, res) => {
     const updated = mutate((s) => {
-      const arr = s[key] as unknown as T[];
+      const arr = (s[key] as unknown as T[] | undefined) ?? [];
       const i = arr.findIndex((x) => x.id === req.params.id);
       if (i === -1) return null;
       arr[i] = { ...arr[i], ...req.body, id: req.params.id };
@@ -120,7 +124,7 @@ function crud<T extends { id: string }>(
   });
   app.delete(`/api/${path}/:id`, (req, res) => {
     const ok = mutate((s) => {
-      const arr = s[key] as unknown as T[];
+      const arr = (s[key] as unknown as T[] | undefined) ?? [];
       const i = arr.findIndex((x) => x.id === req.params.id);
       if (i === -1) return false;
       arr.splice(i, 1);
@@ -234,6 +238,94 @@ app.delete("/api/links/:id", (req, res) => {
 });
 
 crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
+
+// ---------- Políticas de utilização interna ----------
+// CRUD genérico (admin cria/edita; todos leem). Ordenadas por `ordem` (asc) e, como
+// desempate, pela última atualização. O front carimba `atualizadoEm` no create/update.
+crud<Politica>("politicas", "politicas", "pol", (a, b) =>
+  (a.ordem ?? 0) - (b.ordem ?? 0) || +new Date(a.atualizadoEm) - +new Date(b.atualizadoEm),
+);
+
+// ---------- Feedback do portal (bug / melhoria / outro) ----------
+// Reporte sobre a PRÓPRIA aplicação. O autor vê os seus; o admin vê e gerencia todos.
+const REPORTE_TIPOS: ReporteTipo[] = ["bug", "melhoria", "outro"];
+const REPORTE_STATUS: ReporteStatus[] = ["aberto", "em_analise", "resolvido", "arquivado"];
+
+app.get("/api/reportes", async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const todos = [...(getStore().reportes ?? [])].sort(
+    (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
+  );
+  // Admin vê tudo; colaborador vê só os que abriu (chave CANÔNICA colapsa oid⇄e-mail).
+  let ehAdmin = false;
+  try {
+    ehAdmin = (await getProfile(upn)).isAdmin;
+  } catch {
+    /* sem perfil — trata como não-admin */
+  }
+  if (ehAdmin) return res.json(todos);
+  const eu = canonizar(upn);
+  res.json(eu ? todos.filter((r) => canonizar(r.de) === eu) : []);
+});
+
+app.post("/api/reportes", (req, res) => {
+  const de = upnDaRequisicao(req);
+  if (!de) return res.status(400).json({ error: "usuário não identificado" });
+  const mensagem = String(req.body?.mensagem || "").trim();
+  if (!mensagem) return res.status(400).json({ error: "mensagem obrigatória" });
+  const tipo: ReporteTipo = REPORTE_TIPOS.includes(req.body?.tipo) ? req.body.tipo : "outro";
+
+  const item: Reporte = {
+    id: newId("rep"),
+    tipo,
+    titulo: String(req.body?.titulo || "").trim().slice(0, 160),
+    mensagem: mensagem.slice(0, 4000),
+    pagina: String(req.body?.pagina || "").trim().slice(0, 200) || undefined,
+    de,
+    deNome: String(req.body?.deNome || de.split("@")[0] || "Colaborador"),
+    status: "aberto",
+    criadoEm: new Date().toISOString(),
+  };
+  mutate((s) => {
+    if (!s.reportes) s.reportes = [];
+    s.reportes.unshift(item);
+  });
+  res.status(201).json(item);
+});
+
+// ADMIN: atualiza o status de um reporte (triagem/andamento/resolução).
+app.put("/api/reportes/:id", async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const perfil = await getProfile(upn);
+  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores" });
+  const status = req.body?.status as ReporteStatus;
+  if (!REPORTE_STATUS.includes(status)) return res.status(400).json({ error: "status inválido" });
+  const updated = mutate((s) => {
+    const r = s.reportes?.find((x) => x.id === req.params.id);
+    if (!r) return null;
+    r.status = status;
+    r.atualizadoEm = new Date().toISOString();
+    return r;
+  });
+  if (!updated) return res.status(404).json({ error: "não encontrado" });
+  res.json(updated);
+});
+
+// ADMIN: remove um reporte já tratado.
+app.delete("/api/reportes/:id", async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const perfil = await getProfile(upn);
+  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores" });
+  const ok = mutate((s) => {
+    const arr = s.reportes ?? [];
+    const i = arr.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return false;
+    arr.splice(i, 1);
+    return true;
+  });
+  if (!ok) return res.status(404).json({ error: "não encontrado" });
+  res.status(204).end();
+});
 
 // ---------- Gamificação: pontos + ranking ----------
 // A identidade (upn) vem de ?upn= — em PRODUÇÃO o middleware requireAuth SOBRESCREVE esse

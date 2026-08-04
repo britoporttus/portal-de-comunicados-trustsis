@@ -115,9 +115,39 @@ function pontosDeFeedbacks(fbs: Feedback[]): PontoEvento[] {
 
 export function seedData(): Store {
   const feedbacks = seedFeedbacks();
+  const agora = iso(now);
   return {
     pontos: [...seedPontos(), ...pontosDeFeedbacks(feedbacks)],
     feedbacks,
+    politicas: [
+      {
+        id: "pol_1",
+        titulo: "Código de conduta",
+        categoria: "Geral",
+        ordem: 1,
+        atualizadoEm: agora,
+        conteudo:
+          "Esperamos de todos os colaboradores respeito, ética e profissionalismo no dia a dia.\n\n• Trate colegas, clientes e parceiros com cordialidade e sem qualquer forma de discriminação.\n• Preserve a confidencialidade das informações da empresa e de seus clientes.\n• Comunique de forma transparente e assuma a responsabilidade pelas suas entregas.\n\nCasos de violação devem ser reportados ao RH ou à liderança direta.",
+      },
+      {
+        id: "pol_2",
+        titulo: "Uso de e-mail e comunicação",
+        categoria: "TI",
+        ordem: 2,
+        atualizadoEm: agora,
+        conteudo:
+          "As ferramentas de comunicação corporativa (e-mail, Teams) são de uso profissional.\n\n• Utilize a assinatura padrão da empresa nos e-mails externos.\n• Não encaminhe informações internas para contas pessoais.\n• Evite anexos sensíveis sem criptografia.\n\nO uso pessoal eventual é tolerado, desde que não prejudique a produtividade nem viole as demais políticas.",
+      },
+      {
+        id: "pol_3",
+        titulo: "Segurança da informação",
+        categoria: "Segurança",
+        ordem: 3,
+        atualizadoEm: agora,
+        conteudo:
+          "Proteger os dados da TrustSis e de nossos clientes é responsabilidade de todos.\n\n• A autenticação multifator (MFA) é obrigatória em todos os sistemas corporativos.\n• Nunca compartilhe suas senhas; utilize o cofre de senhas aprovado.\n• Bloqueie a tela ao se ausentar e não deixe documentos sensíveis expostos.\n• Reporte imediatamente qualquer incidente ou suspeita de vazamento.",
+      },
+    ],
     comunicados: [
       {
         id: "com_1",

@@ -33,6 +33,17 @@ const PUBLICO_META: Record<PublicoAlvo, string> = {
   pj: "Somente PJ",
 };
 
+const MESES_CAP = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+/** "2026-08" -> "Agosto de 2026" (rótulo do agrupador por mês/ano). */
+function rotuloMes(chave: string): string {
+  const [ano, mes] = chave.split("-").map(Number);
+  return `${MESES_CAP[mes - 1]} de ${ano}`;
+}
+
 interface FormState {
   titulo: string;
   resumo: string;
@@ -106,6 +117,24 @@ export default function ComunicadosPage() {
     if (isAdmin) return todos;
     return todos.filter((c) => visivelPara(c, me?.tipoContrato, me?.area));
   }, [data, isAdmin, me?.tipoContrato, me?.area]);
+
+  // Agrupa por mês/ano (assim comunicados antigos não "expiram" — ficam arquivados no seu
+  // mês). Fixados saem para uma seção própria no topo. A lista já vem ordenada da API
+  // (fixado primeiro, depois data desc), então cada grupo mantém a ordem de recência.
+  const grupos = useMemo(() => {
+    const fixados = comunicados.filter((c) => c.fixado);
+    const resto = comunicados.filter((c) => !c.fixado);
+    const mapa = new Map<string, Comunicado[]>();
+    for (const c of resto) {
+      const d = new Date(c.publicadoEm);
+      const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const arr = mapa.get(chave);
+      if (arr) arr.push(c);
+      else mapa.set(chave, [c]);
+    }
+    const meses = [...mapa.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    return { fixados, meses };
+  }, [comunicados]);
 
   const abrirNovo = () => {
     setEditId(null);
@@ -192,6 +221,123 @@ export default function ComunicadosPage() {
     } finally {
       setConfirmando(null);
     }
+  };
+
+  // Um cartão de comunicado (reutilizado dentro de cada grupo mês/ano e na seção Fixados).
+  const renderCard = (c: Comunicado) => {
+    const jaLeu = !!c.leituras?.includes(meuUpn);
+    const totalLeituras = c.leituras?.length ?? 0;
+    return (
+      <div
+        key={c.id}
+        className={
+          "rounded-xl border bg-card p-4 shadow-sm " +
+          (c.obrigatorio && !jaLeu && !isAdmin ? "border-warning/50" : "border-border")
+        }
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <CategoriaBadge categoria={c.categoria} />
+              <PrioridadeBadge prioridade={c.prioridade} />
+              {c.obrigatorio && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">
+                  <AlertTriangle className="size-3" /> Leitura obrigatória
+                </span>
+              )}
+              {c.publico && c.publico !== "todos" && (
+                <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
+                  {PUBLICO_META[c.publico]}
+                </span>
+              )}
+              {(c.departamentos ?? []).map((d) => (
+                <span
+                  key={d}
+                  className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                >
+                  {d}
+                </span>
+              ))}
+              {c.fixado && <Pin className="size-3.5 text-primary" />}
+            </div>
+            <h3 className="font-semibold text-foreground">
+              <Link to={`/comunicados/${c.id}`} className="hover:text-primary hover:underline">
+                {c.titulo}
+              </Link>
+            </h3>
+            {c.resumo && <p className="text-sm text-muted-foreground">{c.resumo}</p>}
+            <p className="text-xs text-muted-foreground">
+              {c.autor} · {tempoRelativo(c.publicadoEm)}
+            </p>
+
+            {/* Imagens anexadas */}
+            {(c.imagens ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {(c.imagens ?? []).map((src, i) => (
+                  <button
+                    type="button"
+                    key={i}
+                    onClick={() => setLightbox(src)}
+                    className="size-24 overflow-hidden rounded-lg border border-border bg-secondary transition-opacity hover:opacity-90"
+                  >
+                    <img
+                      src={src}
+                      alt={`Imagem ${i + 1} do comunicado`}
+                      className="size-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Confirmação de leitura (obrigatórios) */}
+            {c.obrigatorio && !isAdmin && (
+              <div className="pt-1">
+                {jaLeu ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
+                    <CheckCircle2 className="size-4" /> Leitura confirmada
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => confirmarLeitura(c.id)}
+                    disabled={confirmando === c.id || !meuUpn}
+                  >
+                    <CheckCircle2 className="size-4" /> Confirmar leitura
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Contagem de confirmações (visão admin) — clique para ver quem confirmou */}
+            {c.obrigatorio && isAdmin && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => totalLeituras > 0 && setVerLeitores(c)}
+                  disabled={totalLeituras === 0}
+                  className="inline-flex items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors enabled:hover:text-primary enabled:hover:underline disabled:cursor-default"
+                >
+                  <Users className="size-3.5" />
+                  {totalLeituras} confirmaç{totalLeituras === 1 ? "ão" : "ões"} de leitura
+                  {totalLeituras > 0 && <span className="text-primary">· ver quem</span>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {isAdmin && (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
+                <Pencil className="size-4" />
+              </Button>
+              <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (

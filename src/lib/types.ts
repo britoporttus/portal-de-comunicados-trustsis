@@ -194,3 +194,30 @@ export interface Ticket {
   atualizadoEm?: string;
   externoRef?: string;
 }
+
+// ---- Feedback do portal (bug / melhoria / outro) ----
+export type ReporteTipo = "bug" | "melhoria" | "outro";
+export type ReporteStatus = "aberto" | "em_analise" | "resolvido" | "arquivado";
+
+export interface Reporte {
+  id: string;
+  tipo: ReporteTipo;
+  titulo: string;
+  mensagem: string;
+  pagina?: string;
+  de: string;
+  deNome: string;
+  status: ReporteStatus;
+  criadoEm: string;
+  atualizadoEm?: string;
+}
+
+// ---- Políticas de utilização interna ----
+export interface Politica {
+  id: string;
+  titulo: string;
+  conteudo: string;
+  categoria?: string;
+  ordem?: number;
+  atualizadoEm: string;
+}

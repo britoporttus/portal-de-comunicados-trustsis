@@ -1,6 +1,6 @@
 import {
   Home, Megaphone, CalendarDays, Cake, Plane, Network, LayoutGrid, Share2,
-  Trophy, MessageSquareHeart, Ticket,
+  Trophy, MessageSquareHeart, Ticket, ScrollText, MessageSquareWarning,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,8 +18,10 @@ export const NAV: NavItem[] = [
   { to: "/ferias", label: "Quem está de férias", icon: Plane },
   { to: "/organograma", label: "Organograma", icon: Network },
   { to: "/links", label: "Links úteis", icon: LayoutGrid },
+  { to: "/politicas", label: "Políticas internas", icon: ScrollText },
   { to: "/social", label: "Redes sociais", icon: Share2 },
   { to: "/tickets", label: "Tickets", icon: Ticket },
   { to: "/ranking", label: "Ranking", icon: Trophy },
   { to: "/feedback", label: "Feedback", icon: MessageSquareHeart },
+  { to: "/reportar", label: "Feedback do portal", icon: MessageSquareWarning },
 ];
