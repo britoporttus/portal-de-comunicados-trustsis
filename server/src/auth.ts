@@ -72,16 +72,33 @@ async function identityFromToken(token: string): Promise<TokenIdentity> {
   return { oid, upn, email };
 }
 
-/** Middleware de barreira. Aplicado às rotas /api (exceto /api/health). */
+/** Middleware de identidade. Aplicado às rotas /api (exceto /api/health).
+ *
+ *  Duas responsabilidades, deliberadamente separadas:
+ *
+ *  1) IDENTIFICAR — sempre que houver token. Se o request traz um Bearer válido, resolvemos o
+ *     usuário REAL e injetamos o `?upn=` que os handlers já leem, INDEPENDENTE de a barreira
+ *     estar ligada. Sem isto, um portal com SSO configurado mas barreira DESLIGADA (o caso do
+ *     preview do Hive) fazia login de verdade e mesmo assim exibia o DEMO_USER_UPN, porque o
+ *     token era simplesmente ignorado. Agora o login VALE: quem entrou vê os próprios dados.
+ *
+ *  2) EXIGIR — só quando `authRequired()`. Sem token (ou com token inválido) responde 401.
+ *     Com a barreira desligada, token ausente/ruim apenas não identifica (segue em demo) e
+ *     nunca derruba o request.
+ */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!authRequired()) return next(); // preview/demo/sem SSO configurado: sem barreira
-
+  const exigido = authRequired();
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+
   if (!token) {
-    res.status(401).json({ error: "não autenticado" });
-    return;
+    if (exigido) {
+      res.status(401).json({ error: "não autenticado" });
+      return;
+    }
+    return next(); // preview/demo/sem SSO configurado: segue sem identidade
   }
+
   try {
     const id = await identityFromToken(token);
     // Resolve a chave de diretório correta (member @trustsis.com quando o login é um guest
@@ -91,6 +108,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     (req.query as Record<string, unknown>).upn = key;
     next();
   } catch (e) {
-    res.status(401).json({ error: "token inválido", detail: (e as Error).message });
+    if (exigido) {
+      res.status(401).json({ error: "token inválido", detail: (e as Error).message });
+      return;
+    }
+    // Sem barreira, token ruim (expirado, de outro tenant) não é motivo para negar acesso —
+    // apenas não identifica. O front mostra o gate quando não há sessão utilizável.
+    next();
   }
 }

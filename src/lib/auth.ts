@@ -115,6 +115,18 @@ function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
   return a.tenantId?.toLowerCase() === tenant.toLowerCase();
 }
 
+/** O portal está EMBUTIDO num iframe? (é o caso do preview do Hive, que renderiza o app
+ *  dentro do painel.) Isso muda tudo no login: `login.microsoftonline.com` recusa ser
+ *  carregado em iframe (X-Frame-Options), então um `loginRedirect` daqui apenas mataria o
+ *  frame — o caminho viável é POPUP, que abre uma janela top-level de verdade. */
+export function emIframe(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // cross-origin ao ler window.top = estamos embutidos
+  }
+}
+
 let pca: PublicClientApplication | null = null;
 let initPromise: Promise<void> | null = null;
 
@@ -238,7 +250,14 @@ export async function initAuth(): Promise<void> {
         return;
       }
 
-      // 2) Sem conta utilizável → login interativo por redirect (uma vez por aba).
+      // 2a) EMBUTIDO (preview do Hive): redirect é impossível dentro do iframe — o Entra
+      //     recusa ser embutido e o frame morreria numa tela em branco. Aqui paramos: o
+      //     `AuthGate` assume e abre o SELETOR DE CONTAS do Entra em POPUP, no gesto do
+      //     usuário (navegador bloqueia popup automático). Depois do 1º login a conta fica
+      //     no localStorage e as próximas cargas caem no passo (1) — entram diretas.
+      if (emIframe()) return;
+
+      // 2b) Sem conta utilizável → login interativo por redirect (uma vez por aba).
       //    `prompt: "select_account"` força o Entra a MOSTRAR o seletor de contas em
       //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
       //    — assim o usuário escolhe a conta TrustSis explicitamente.
@@ -280,6 +299,9 @@ export async function getAuthToken(): Promise<string | null> {
     // cookie de terceiro / block_iframe_reload, etc.) → reautenticar por redirect
     // ÚNICO. Nunca condicionar a `instanceof InteractionRequiredAuthError`: no
     // fluxo silent-first o erro real quase nunca é esse tipo exato.
+    // Embutido (preview): não há redirect possível — devolve null e o gate reaparece
+    // para o usuário reautenticar por popup (com gesto).
+    if (emIframe()) return null;
     if (!redirectInFlight()) {
       clearStaleInteraction();
       markRedirect();
@@ -298,21 +320,53 @@ export async function getAuthToken(): Promise<string | null> {
  *  auto-redirect do initAuth, este IGNORA a janela anti-loop: se o usuário clicou
  *  "Entrar", ele QUER ir pro SSO agora. Limpa qualquer `interaction_in_progress` preso
  *  antes de navegar, então é o caminho à prova de estado-local-corrompido (o cenário do
- *  Edge que restaura abas). No-op no preview (auth desligado). */
-export async function login(): Promise<void> {
+ *  Edge que restaura abas). No-op quando o SSO não está configurado.
+ *
+ *  Dois caminhos, escolhidos pelo contexto de execução:
+ *   - EMBUTIDO (preview do Hive, app dentro de iframe) → `loginPopup`: abre a janela do
+ *     Entra por cima, o usuário escolhe a conta, e a resposta volta pela redirect bridge
+ *     (ver lib/authBridge.ts). Resolve `true` = sessão estabelecida nesta mesma página.
+ *   - ABA PRÓPRIA (produção) → `loginRedirect`, o fluxo já validado em produção. Nesse
+ *     caso a função navega para fora e o `true` nunca chega a ser lido.
+ *
+ *  Lança quando o popup é bloqueado/cancelado — o gate mostra a mensagem. */
+export async function login(): Promise<boolean> {
   await carregarConfigAuth();
-  if (!authAtivo()) return;
+  if (!authAtivo()) return false;
   const app = instance();
   await app.initialize();
   clearStaleInteraction();
+
+  if (emIframe()) {
+    const res = await app.loginPopup({ scopes: LOGIN_SCOPES, prompt: "select_account" });
+    const conta = res?.account ?? accountsForTenant(app)[0] ?? null;
+    if (!conta) return false;
+    app.setActiveAccount(conta);
+    return true;
+  }
+
   markRedirect();
   await robustLoginRedirect(app);
+  return true;
 }
 
 /** Conta ativa (para exibir nome/UPN, se necessário). */
 export function getAccount(): AccountInfo | null {
   if (!authAtivo()) return null;
-  return activeAccount();
+  try {
+    return activeAccount();
+  } catch {
+    // MSAL ainda não inicializada (initAuth falhou) — tratamos como "sem sessão".
+    return null;
+  }
+}
+
+/** Há sessão de SSO utilizável AGORA? Usado pelo portal para decidir entre mostrar o
+ *  conteúdo (com o usuário autenticado) ou o gate de login. Quando o SSO não está
+ *  configurado devolve `true` — nesse cenário não existe login a exigir (modo demo). */
+export function temSessao(): boolean {
+  if (!authAtivo()) return true;
+  return Boolean(getAccount());
 }
 
 /** Logout explícito (opcional — a barreira normalmente é transparente). */

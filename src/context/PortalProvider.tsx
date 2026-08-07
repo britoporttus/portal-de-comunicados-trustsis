@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { authAtivo, login } from "@/lib/auth";
+import { authAtivo, login, temSessao } from "@/lib/auth";
 import type { Acao, Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
@@ -15,7 +15,11 @@ interface PortalState {
   // há usuário autenticado, o portal NÃO mostra dados de demo — mostra o gate de login
   // que força o SSO. No preview (auth desligado) isto é sempre false.
   needsLogin: boolean;
-  login: () => void; // dispara o SSO por gesto do usuário (botão do gate)
+  /** Dispara o SSO por gesto do usuário (botão do gate). Resolve `true` quando a sessão foi
+   *  estabelecida NESTA página (fluxo de popup, usado quando o portal roda embutido);
+   *  no fluxo de redirect a página navega para fora antes de o valor ser lido. Rejeita
+   *  quando o popup é bloqueado/cancelado — o gate mostra o erro. */
+  login: () => Promise<boolean>;
   isAdmin: boolean; // papel efetivo (respeita "ver como usuário")
   // RBAC (perfis de acesso do portal): o backend resolve o acesso EFETIVO do usuário
   // (grupos do Entra → perfis → união das permissões) e o front usa para USABILIDADE —
@@ -122,10 +126,17 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     },
     [acesso, paginas],
   );
-  // Com SSO ligado e sem usuário após carregar → precisa logar (força o SSO, sem demo).
+  // Com SSO ligado, o acesso ao portal EXIGE sessão: sem conta autenticada (ou sem `me`,
+  // quando a barreira do backend devolve 401) mostramos o gate em vez dos dados de demo.
+  //
+  // Por que checar `temSessao()` e não só `me`: com a barreira do backend DESLIGADA — o caso
+  // do preview do Hive — o `/api/me` responde 200 com o usuário de demonstração mesmo sem
+  // login. Olhar só para `me` fazia o portal "abrir sozinho" como o DEMO_USER_UPN e nunca
+  // pedir o SSO. Agora o critério é a sessão do Entra de verdade.
+  //
   // authAtivo() é resolvido em RUNTIME (o main.tsx aguarda initAuth antes de renderizar),
   // porque a configuração de SSO agora vem do backend e não do build.
-  const needsLogin = authAtivo() && !loading && !me;
+  const needsLogin = authAtivo() && !loading && (!me || !temSessao());
 
   return (
     <Ctx.Provider
