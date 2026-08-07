@@ -1,6 +1,7 @@
 import {
   Home, Megaphone, CalendarDays, Cake, Plane, Network, LayoutGrid, Share2,
   Trophy, MessageSquareHeart, Ticket, ScrollText, MessageSquareWarning, ShieldCheck,
+  FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,8 @@ export const NAV: NavItem[] = [
   { to: "/organograma", label: "Organograma", icon: Network },
   { to: "/links", label: "Links úteis", icon: LayoutGrid },
   { to: "/politicas", label: "Políticas internas", icon: ScrollText },
+  // Bibliotecas de documentos do SharePoint (Marketing, Templates, Institucional…).
+  { to: "/documentos", label: "Documentos", icon: FolderOpen },
   { to: "/social", label: "Redes sociais", icon: Share2 },
   { to: "/tickets", label: "Tickets", icon: Ticket },
   { to: "/ranking", label: "Ranking", icon: Trophy },

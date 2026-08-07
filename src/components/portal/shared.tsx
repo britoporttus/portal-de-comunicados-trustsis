@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Mail, Users, Cloud, Folder, LayoutGrid, LifeBuoy, Link2, Globe, Calendar,
-  Video, MapPin, type LucideIcon,
+  Video, MapPin, FolderOpen, BookOpen, Megaphone, Presentation, Image, FileArchive,
+  Building2, type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,28 @@ const LINK_ICONS: Record<string, LucideIcon> = {
 
 export function iconForLink(key: string): LucideIcon {
   return LINK_ICONS[key] ?? Link2;
+}
+
+// Ícones das BIBLIOTECAS de documentos (o admin escolhe um na hora de cadastrar a pasta).
+const BIBLIOTECA_ICONS: Record<string, LucideIcon> = {
+  folder: FolderOpen, book: BookOpen, marketing: Megaphone, apresentacao: Presentation,
+  imagens: Image, arquivo: FileArchive, institucional: Building2,
+};
+
+/** Lista de ícones oferecidos no cadastro de uma biblioteca (chave + rótulo em pt-BR). */
+export const BIBLIOTECA_ICON_OPCOES: Array<[string, string]> = [
+  ["folder", "Pasta"],
+  ["book", "Manuais / guias"],
+  ["marketing", "Marketing"],
+  ["apresentacao", "Apresentações"],
+  ["imagens", "Imagens / mídia"],
+  ["arquivo", "Arquivos / templates"],
+  ["institucional", "Institucional"],
+];
+
+export function BibliotecaIcone({ nome, className }: { nome?: string; className?: string }) {
+  const Icon = BIBLIOTECA_ICONS[nome ?? ""] ?? FolderOpen;
+  return <Icon className={cn("size-5", className)} />;
 }
 
 function hostFromUrl(url: string): string {

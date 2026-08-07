@@ -54,6 +54,31 @@ export interface LinkUtil {
   icon: string; // nome do ícone lucide ou chave conhecida
   /** Perfis de acesso que enxergam o atalho (vazio/ausente = todos). */
   perfis?: string[];
+  // ---- usados pelos ATALHOS DA EMPRESA (store.atalhos), geridos pelo admin ----
+  /** Agrupador na página de links (ex.: "Dashboards", "Sistemas", "Comercial"). */
+  categoria?: string;
+  /** Texto curto de apoio exibido sob o nome do atalho. */
+  descricao?: string;
+  /** Ordem manual dentro da categoria (menor primeiro). */
+  ordem?: number;
+}
+
+/** Biblioteca de documentos: uma pasta compartilhada do SharePoint/OneDrive listada
+ *  (read-only) dentro do portal — mesmo padrão já usado nas Políticas internas, agora
+ *  com N pastas cadastradas pelo admin na UI (nada de env por biblioteca).
+ *  Cada SUBPASTA da pasta vira uma categoria; arquivos na raiz caem em "Geral". */
+export interface Biblioteca {
+  id: string;
+  nome: string;
+  descricao?: string;
+  /** URL de compartilhamento da pasta (o que o SharePoint/OneDrive gera em "Compartilhar"). */
+  shareUrl: string;
+  /** Ícone lucide/chave conhecida (ver front src/components/portal/shared.tsx). */
+  icone?: string;
+  /** Perfis de acesso que enxergam a biblioteca (vazio/ausente = todos). */
+  perfis?: string[];
+  criadoEm?: string;
+  atualizadoEm?: string;
 }
 
 export interface PublicacaoSocial {
@@ -94,6 +119,9 @@ export interface Perfil {
   padrao?: boolean;
   /** perfis de sistema (Administrador/Colaborador) não podem ser excluídos. */
   sistema?: boolean;
+  /** migrações já aplicadas a este perfil (ex.: "fase2") — evita reaplicar defaults de
+   *  recursos novos por cima de uma escolha deliberada do admin. */
+  migracoes?: string[];
   criadoEm?: string;
   atualizadoEm?: string;
 }
@@ -229,6 +257,11 @@ export interface Store {
   social: PublicacaoSocial[];
   // Links personalizados por usuário (chave = e-mail/UPN). Cada um gerencia os seus.
   linksByUser?: Record<string, LinkUtil[]>;
+  // ATALHOS DA EMPRESA (Fase 2): links institucionais/dashboards externos publicados pelo
+  // admin e segregados por perfil. Diferente de `links`/`linksByUser`, que são PESSOAIS.
+  atalhos?: LinkUtil[];
+  // Bibliotecas de documentos (Fase 2): pastas do SharePoint/OneDrive listadas no portal.
+  bibliotecas?: Biblioteca[];
   // Gamificação: ledger de pontos e feedbacks entre colegas.
   pontos?: PontoEvento[];
   feedbacks?: Feedback[];

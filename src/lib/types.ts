@@ -51,6 +51,23 @@ export interface LinkUtil {
   url: string;
   icon: string;
   perfis?: string[];
+  // Campos usados pelos ATALHOS DA EMPRESA (publicados pelo admin, segregados por perfil).
+  categoria?: string;
+  descricao?: string;
+  ordem?: number;
+}
+
+/** Biblioteca de documentos: pasta do SharePoint/OneDrive listada (read-only) no portal.
+ *  Mesmo motor das Políticas internas, agora com N pastas cadastradas na UI de admin. */
+export interface Biblioteca {
+  id: string;
+  nome: string;
+  descricao?: string;
+  shareUrl: string;
+  icone?: string;
+  perfis?: string[];
+  criadoEm?: string;
+  atualizadoEm?: string;
 }
 
 export interface PublicacaoSocial {

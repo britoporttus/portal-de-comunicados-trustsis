@@ -19,6 +19,7 @@ import RankingPage from "@/pages/RankingPage";
 import FeedbackPage from "@/pages/FeedbackPage";
 import TicketsPage from "@/pages/TicketsPage";
 import PoliticasPage from "@/pages/PoliticasPage";
+import DocumentosPage from "@/pages/DocumentosPage";
 import ReportarPage from "@/pages/ReportarPage";
 import AdminPage from "@/pages/AdminPage";
 
@@ -63,6 +64,7 @@ function Gated() {
         <Route path="organograma" element={<Protegida rota="/organograma"><OrganogramaPage /></Protegida>} />
         <Route path="links" element={<Protegida rota="/links"><LinksPage /></Protegida>} />
         <Route path="politicas" element={<Protegida rota="/politicas"><PoliticasPage /></Protegida>} />
+        <Route path="documentos" element={<Protegida rota="/documentos"><DocumentosPage /></Protegida>} />
         <Route path="social" element={<Protegida rota="/social"><SocialPage /></Protegida>} />
         <Route path="tickets" element={<Protegida rota="/tickets"><TicketsPage /></Protegida>} />
         <Route path="ranking" element={<Protegida rota="/ranking"><RankingPage /></Protegida>} />

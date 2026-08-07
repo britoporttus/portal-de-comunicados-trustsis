@@ -4,6 +4,25 @@
 > (Claudio, Gustavo, João, Danyele) e no estado atual do portal.
 > Nada aqui foi implementado ainda — é o roteiro proposto.
 >
+> **Revisão 4 (2026-08-07) — FASE 2 IMPLEMENTADA:**
+> • **Bibliotecas de documentos:** o motor das Políticas foi generalizado
+>   (`graph.ts › listarDocsDoShare(shareUrl)`, com cache de 5 min por pasta). O admin cadastra
+>   **N pastas** do SharePoint/OneDrive em **Administração › Bibliotecas** (nome, link de
+>   compartilhamento, ícone e perfis) e elas aparecem na nova página **Documentos**
+>   (`/documentos`) — subpasta = categoria, read-only, arquivo abre no SharePoint.
+>   Nenhuma env nova: nada de `*_SHARE_URL` por pasta.
+> • **Atalhos da empresa (links por perfil):** nova coleção institucional publicada pelo admin
+>   em **Administração › Atalhos da empresa** (categoria, descrição, ordem, ícone e perfis),
+>   exibida no topo de **Links úteis**, acima dos atalhos pessoais. É por aqui que entram os
+>   **dashboards externos (Power BI)** e o registro de projetos do comercial — o portal aponta
+>   para a ferramenta de origem, sem replicar indicador nenhum.
+> • **RBAC:** dois recursos novos (`bibliotecas`, `atalhos`) e a página `/documentos` no
+>   catálogo. Perfis já gravados em produção são **migrados uma única vez**
+>   (`perfis.ts › MIGRACOES`, marca em `Perfil.migracoes`) para não ficarem sem o acesso novo
+>   nem sobrescrever escolhas do admin.
+> • **Pendente:** as URLs reais das pastas (Marketing/Templates/Institucional) e a lista de
+>   dashboards — são cadastro na UI, não código (perguntas 6 e 7 da §7).
+>
 > **Revisão 3 (2026-08-07) — STATUS DE IMPLEMENTAÇÃO:**
 > • **Fase 0 IMPLEMENTADA:** perfis de acesso com CRUD (`/admin`, aba "Perfis de acesso"),
 >   grupos do Entra via `memberOf`/`listGroups`, middleware `requerPerm()` no backend e
@@ -191,6 +210,11 @@ O perfil "Administrador" nasce pré-criado, apontando para esse grupo.
 `LinksPage`.
 **Esforço:** médio (padrão já dominado). **Depende:** `Sites.Read.All` (já em uso nas políticas).
 
+> ✅ **Implementado (Revisão 4).** Entregue como: `listarDocsDoShare()` no Graph (cache 5 min),
+> `Biblioteca` no store + `/api/bibliotecas` (CRUD e `/:id/docs`), `LinkUtil.categoria|descricao|ordem`
+> + `/api/atalhos` (CRUD), página `/documentos`, seção "Atalhos da empresa" em `/links` e as abas
+> **Bibliotecas** e **Atalhos da empresa** em `/admin`. Falta só o **cadastro** das pastas/links reais.
+
 ---
 
 ### Fase 3 — Eventos: integração de escrita com a agenda (Outlook)
@@ -302,5 +326,8 @@ página/ação e segregação de comunicados/eventos/links por perfil. É o pedi
 
 ---
 
-*Fases 0 e 1 implementadas (ver Revisão 3 no topo). Aguardo sua validação das perguntas da §7
-para seguir para a Fase 2 (links, bibliotecas e atalhos para dashboards externos).*
+*Fases 0, 1 e 2 implementadas (ver Revisões 3 e 4 no topo). Próximo passo natural: **Fase 4**
+(políticas com leitura obrigatória e confirmação), que reaproveita as bibliotecas recém-criadas —
+ou a **Fase 3** (eventos → calendário), que depende da permissão `Calendars.ReadWrite`.
+Continuo aguardando as respostas da §7 (em especial 6 e 7: as URLs das pastas e quais dashboards
+entram, que agora são só cadastro na tela de Administração).*

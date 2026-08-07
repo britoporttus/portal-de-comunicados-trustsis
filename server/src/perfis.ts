@@ -37,6 +37,8 @@ export const RECURSOS: RecursoDef[] = [
   { chave: "links", label: "Links úteis", acoes: TODAS },
   { chave: "social", label: "Redes sociais", acoes: TODAS },
   { chave: "politicas", label: "Políticas internas", acoes: SO_VER },
+  { chave: "bibliotecas", label: "Bibliotecas de documentos", acoes: TODAS },
+  { chave: "atalhos", label: "Atalhos da empresa", acoes: TODAS },
   { chave: "tickets", label: "Tickets", acoes: ["ver", "criar"] },
   { chave: "feedback", label: "Feedback entre colegas", acoes: ["ver", "criar", "excluir"] },
   { chave: "reportes", label: "Feedback do portal", acoes: ["ver", "criar", "editar", "excluir"] },
@@ -64,6 +66,7 @@ export const PAGINAS: PaginaDef[] = [
   { rota: "/organograma", label: "Organograma", recurso: "organograma" },
   { rota: "/links", label: "Links úteis", recurso: "links" },
   { rota: "/politicas", label: "Políticas internas", recurso: "politicas" },
+  { rota: "/documentos", label: "Documentos", recurso: "bibliotecas" },
   { rota: "/social", label: "Redes sociais", recurso: "social" },
   { rota: "/tickets", label: "Tickets", recurso: "tickets" },
   { rota: "/ranking", label: "Ranking", recurso: "ranking" },
@@ -116,6 +119,9 @@ function perfisIniciais(): Perfil[] {
       links: ["ver", "criar", "editar", "excluir"],
       social: ["ver"],
       politicas: ["ver"],
+      // Bibliotecas e atalhos da empresa são PUBLICADOS pelo admin: o colaborador só lê.
+      bibliotecas: ["ver"],
+      atalhos: ["ver"],
       tickets: ["ver", "criar"],
       feedback: ["ver", "criar"],
       reportes: ["ver", "criar"],
@@ -130,6 +136,40 @@ function perfisIniciais(): Perfil[] {
   return [admin, colaborador];
 }
 
+// ---------- migrações de perfis já persistidos ----------
+// Recursos/páginas NOVOS (ex.: bibliotecas e atalhos da Fase 2) não existem nos perfis que já
+// estão gravados na produção — sem isto, o Colaborador ficaria sem enxergar a área nova.
+// Só toca em perfis de SISTEMA e só UMA vez (marca em `migracoes`), para nunca desfazer uma
+// escolha deliberada do admin.
+const MIGRACOES: { id: string; aplicar: (p: Perfil) => void }[] = [
+  {
+    id: "fase2-bibliotecas-atalhos",
+    aplicar: (p) => {
+      if (!p.sistema) return;
+      const totais: Acao[] = ["ver", "criar", "editar", "excluir"];
+      p.permissoes ??= {};
+      p.permissoes.bibliotecas ??= p.admin ? [...totais] : ["ver"];
+      p.permissoes.atalhos ??= p.admin ? [...totais] : ["ver"];
+      p.paginas ??= [];
+      if (!p.paginas.includes("/documentos")) p.paginas.push("/documentos");
+    },
+  },
+];
+
+/** Aplica as migrações pendentes. Devolve true se algo mudou (para persistir). */
+function migrarPerfis(perfis: Perfil[]): boolean {
+  let mudou = false;
+  for (const p of perfis) {
+    for (const m of MIGRACOES) {
+      if ((p.migracoes ?? []).includes(m.id)) continue;
+      m.aplicar(p);
+      p.migracoes = [...(p.migracoes ?? []), m.id];
+      mudou = true;
+    }
+  }
+  return mudou;
+}
+
 /** Lista os perfis do store, criando os de sistema na primeira leitura. */
 export function listarPerfis(): Perfil[] {
   const s = getStore();
@@ -137,6 +177,10 @@ export function listarPerfis(): Perfil[] {
     mutate((st) => {
       if (!st.perfis || !st.perfis.length) st.perfis = perfisIniciais();
     });
+  }
+  const perfis = getStore().perfis ?? [];
+  if (perfis.some((p) => MIGRACOES.some((m) => !(p.migracoes ?? []).includes(m.id)))) {
+    mutate((st) => migrarPerfis(st.perfis ?? []));
   }
   return getStore().perfis ?? [];
 }
@@ -175,6 +219,9 @@ export function normalizarPerfil(body: any, base?: Perfil): Perfil {
     admin: base?.admin,
     padrao: body?.padrao === undefined ? base?.padrao : Boolean(body.padrao),
     sistema: base?.sistema,
+    // Preserva o histórico de migrações (senão os defaults de recursos novos voltariam
+    // a ser aplicados por cima do que o admin acabou de decidir nesta edição).
+    migracoes: base?.migracoes,
     criadoEm: base?.criadoEm ?? new Date().toISOString(),
     atualizadoEm: base ? new Date().toISOString() : undefined,
   };

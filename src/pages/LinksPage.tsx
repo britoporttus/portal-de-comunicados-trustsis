@@ -1,6 +1,6 @@
 // Página Links úteis: atalhos para sistemas internos. Admin gerencia (CRUD).
-import { useState } from "react";
-import { LayoutGrid, Plus, Pencil, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
+import { LayoutGrid, Plus, Pencil, ExternalLink, Building2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { LinkUtil } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
@@ -30,6 +30,9 @@ export default function LinksPage() {
   const { me } = usePortal();
   const upn = me?.email;
   const { data, loading, reload } = useAsync(() => api.links.list(upn), [upn]);
+  // ATALHOS DA EMPRESA (Fase 2): publicados pelo admin e filtrados por perfil no backend.
+  // Aqui são read-only — quem gerencia faz isso em Administração › Atalhos da empresa.
+  const { data: atalhos } = useAsync(() => api.atalhos.list(), []);
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -68,18 +71,70 @@ export default function LinksPage() {
 
   const links = data ?? [];
 
+  // Agrupa os atalhos corporativos por categoria (Dashboards, Sistemas, Comercial…).
+  const gruposEmpresa = useMemo(() => {
+    const mapa = new Map<string, LinkUtil[]>();
+    for (const a of atalhos ?? []) {
+      const cat = a.categoria?.trim() || "Geral";
+      const arr = mapa.get(cat);
+      if (arr) arr.push(a);
+      else mapa.set(cat, [a]);
+    }
+    return [...mapa.entries()];
+  }, [atalhos]);
+
   return (
     <div>
       <PageHeader
         icon={LayoutGrid}
         title="Links úteis"
-        description="Seus atalhos pessoais — personalize os sistemas que você mais usa"
+        description="Atalhos da empresa e os seus atalhos pessoais, num só lugar"
         action={
           <Button onClick={abrirNovo}>
             <Plus className="size-4" /> Novo link
           </Button>
         }
       />
+
+      {gruposEmpresa.length > 0 && (
+        <div className="mb-8 space-y-5">
+          {gruposEmpresa.map(([categoria, itens]) => (
+            <section key={categoria}>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Building2 className="size-3.5" /> {categoria}
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {itens.map((a) => (
+                  <a
+                    key={a.id}
+                    href={a.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
+                  >
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary">
+                      <LinkIcon url={a.url} icon={a.icon} label={a.label} className="size-6" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1 font-semibold text-foreground">
+                        <span className="truncate">{a.label}</span>
+                        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {a.descricao || a.url}
+                      </span>
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          ))}
+          <div className="border-b border-border pt-1" />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Meus atalhos
+          </h3>
+        </div>
+      )}
 
       {loading ? (
         <ListSkeleton rows={3} />

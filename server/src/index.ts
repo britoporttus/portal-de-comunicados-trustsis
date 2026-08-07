@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn, listGroups, fetchDiretorioLive } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive } from "./graph.js";
 import { mockPeople } from "./mock.js";
 import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeVer, requerPerm,
@@ -21,6 +21,7 @@ import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
   Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus,
+  Biblioteca, Acesso,
 } from "./types.js";
 
 const app = express();
@@ -241,7 +242,7 @@ app.get("/api/departamentos", async (_req, res) => {
 // perfis do usuário (artefato sem `perfis[]` = visível a todos; ver server/src/perfis.ts).
 function crud<T extends { id: string; perfis?: string[] }>(
   path: string,
-  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social",
+  key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social" | "atalhos",
   idPrefix: string,
   recurso: string,
   sort?: (a: T, b: T) => number,
@@ -396,6 +397,94 @@ app.delete("/api/links/:id", requerPerm("links", "excluir"), (req, res) => {
     return true;
   });
   if (!ok) return res.status(404).json({ error: "não encontrado" });
+  res.status(204).end();
+});
+
+// ---------- Atalhos da EMPRESA (Fase 2): links institucionais e dashboards externos ----------
+// Diferente de /api/links (atalhos PESSOAIS de cada colaborador), estes são publicados pelo
+// admin e segregados por perfil — é aqui que entram Power BI e demais sistemas externos.
+// O portal não hospeda indicador nenhum: só aponta para a ferramenta de origem.
+crud<LinkUtil>("atalhos", "atalhos", "atl", "atalhos", (a, b) =>
+  (a.categoria ?? "").localeCompare(b.categoria ?? "", "pt-BR") ||
+  (a.ordem ?? 0) - (b.ordem ?? 0) ||
+  a.label.localeCompare(b.label, "pt-BR"),
+);
+
+// ---------- Bibliotecas de documentos (Fase 2) ----------
+// Mesmo padrão das Políticas internas (pasta compartilhada do SharePoint/OneDrive listada
+// read-only via Graph), agora com N pastas cadastradas pelo admin NA UI — sem env por pasta.
+// O cadastro fica no store; os arquivos NUNCA são copiados, apenas listados e abertos lá.
+function bibliotecaVisivel(b: Biblioteca, acesso: Acesso): boolean {
+  return podeVer(b, acesso, "bibliotecas");
+}
+
+app.get("/api/bibliotecas", requerPerm("bibliotecas", "ver"), async (req, res) => {
+  const lista = [...(getStore().bibliotecas ?? [])].sort((a, b) =>
+    a.nome.localeCompare(b.nome, "pt-BR"),
+  );
+  res.json(filtrarPorPerfil(lista, await acessoDaReq(req), "bibliotecas"));
+});
+
+/** Documentos de UMA biblioteca (lidos do SharePoint/OneDrive na hora, com cache curto). */
+app.get("/api/bibliotecas/:id/docs", requerPerm("bibliotecas", "ver"), async (req, res) => {
+  const b = (getStore().bibliotecas ?? []).find((x) => x.id === req.params.id);
+  // Restrita a outros perfis: 404 (não revela a existência da biblioteca).
+  if (!b || !bibliotecaVisivel(b, await acessoDaReq(req))) {
+    return res.status(404).json({ error: "não encontrada" });
+  }
+  try {
+    const forcar = req.query.forcar === "true";
+    res.json(await listarDocsDoShare(b.shareUrl, forcar));
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+/** Normaliza o corpo vindo da UI (defensivo — nada de campo solto virando registro). */
+function normalizarBiblioteca(body: any, base?: Biblioteca): Biblioteca {
+  const perfis = Array.isArray(body?.perfis)
+    ? body.perfis.map((p: unknown) => String(p)).filter(Boolean)
+    : base?.perfis;
+  return {
+    id: base?.id ?? newId("bib"),
+    nome: String(body?.nome ?? base?.nome ?? "").trim().slice(0, 80) || "Nova biblioteca",
+    descricao: String(body?.descricao ?? base?.descricao ?? "").trim().slice(0, 300) || undefined,
+    shareUrl: String(body?.shareUrl ?? base?.shareUrl ?? "").trim(),
+    icone: String(body?.icone ?? base?.icone ?? "").trim() || undefined,
+    perfis,
+    criadoEm: base?.criadoEm ?? new Date().toISOString(),
+    atualizadoEm: base ? new Date().toISOString() : undefined,
+  };
+}
+
+app.post("/api/bibliotecas", requerPerm("bibliotecas", "criar"), (req, res) => {
+  const item = normalizarBiblioteca(req.body ?? {});
+  if (!item.shareUrl) return res.status(400).json({ error: "informe o link de compartilhamento da pasta" });
+  mutate((s) => (s.bibliotecas ??= []).push(item));
+  res.status(201).json(item);
+});
+
+app.put("/api/bibliotecas/:id", requerPerm("bibliotecas", "editar"), (req, res) => {
+  const updated = mutate((s) => {
+    const arr = s.bibliotecas ?? [];
+    const i = arr.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return null;
+    arr[i] = normalizarBiblioteca(req.body ?? {}, arr[i]);
+    return arr[i];
+  });
+  if (!updated) return res.status(404).json({ error: "não encontrada" });
+  res.json(updated);
+});
+
+app.delete("/api/bibliotecas/:id", requerPerm("bibliotecas", "excluir"), (req, res) => {
+  const ok = mutate((s) => {
+    const arr = s.bibliotecas ?? [];
+    const i = arr.findIndex((x) => x.id === req.params.id);
+    if (i === -1) return false;
+    arr.splice(i, 1);
+    return true;
+  });
+  if (!ok) return res.status(404).json({ error: "não encontrada" });
   res.status(204).end();
 });
 

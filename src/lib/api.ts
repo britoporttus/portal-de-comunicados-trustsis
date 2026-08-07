@@ -4,7 +4,7 @@ import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial,
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
-  Reporte, ReporteTipo, ReporteStatus, PoliticaDoc,
+  Reporte, ReporteTipo, ReporteStatus, PoliticaDoc, Biblioteca,
   Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig,
 } from "./types";
 import { getAuthToken } from "./auth";
@@ -166,6 +166,28 @@ export const api = {
   // ---- Políticas de utilização interna (documentos do SharePoint, read-only) ----
   politicas: {
     list: () => req<PoliticaDoc[]>("/politicas"),
+  },
+
+  // ---- Atalhos da EMPRESA (institucionais/dashboards externos, segregados por perfil) ----
+  // Não confundir com `links`, que são os atalhos PESSOAIS de cada colaborador.
+  atalhos: {
+    list: () => req<LinkUtil[]>("/atalhos"),
+    create: (b: Partial<LinkUtil>) => req<LinkUtil>("/atalhos", { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<LinkUtil>) =>
+      req<LinkUtil>(`/atalhos/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    remove: (id: string) => req<void>(`/atalhos/${id}`, { method: "DELETE" }),
+  },
+
+  // ---- Bibliotecas de documentos (pastas do SharePoint/OneDrive cadastradas na UI) ----
+  bibliotecas: {
+    list: () => req<Biblioteca[]>("/bibliotecas"),
+    // Documentos de UMA biblioteca (lidos do Graph, cache curto no servidor).
+    docs: (id: string, forcar = false) =>
+      req<PoliticaDoc[]>(`/bibliotecas/${id}/docs${forcar ? "?forcar=true" : ""}`),
+    create: (b: Partial<Biblioteca>) => req<Biblioteca>("/bibliotecas", { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<Biblioteca>) =>
+      req<Biblioteca>(`/bibliotecas/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    remove: (id: string) => req<void>(`/bibliotecas/${id}`, { method: "DELETE" }),
   },
 
   // ---- RBAC: perfis de acesso do portal (Grupo do Entra → Perfil → Página/Artefato) ----

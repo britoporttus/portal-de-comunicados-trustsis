@@ -563,15 +563,22 @@ function mapDoc(f: any, categoria?: string): PoliticaDoc {
   };
 }
 
-/** Documentos de política vindos da pasta compartilhada do SharePoint/OneDrive.
- *  Cada SUBPASTA (1 nível) vira uma categoria; arquivos na raiz caem em "Geral".
- *  Sem Graph => docs DEMO (preview navegável). Com Graph mas sem POLITICAS_SHARE_URL
- *  configurada => lista vazia (a página mostra o aviso de configuração). */
-export async function getPoliticas(): Promise<PoliticaDoc[]> {
-  if (!graphEnabled) return mockPoliticas();
-  if (!config.politicas.shareUrl) return [];
+// Cache curto por pasta: navegar entre bibliotecas não pode virar enxurrada de chamadas ao
+// Graph. TTL baixo de propósito (documento novo aparece rápido) e invalidável por `forcar`.
+const DOCS_TTL_MS = 5 * 60_000;
+const docsCache = new Map<string, { em: number; docs: PoliticaDoc[] }>();
+
+/** Documentos (1 nível de subpastas) de QUALQUER pasta compartilhada do SharePoint/OneDrive.
+ *  É o motor por trás das Políticas internas e das Bibliotecas de documentos (Fase 2):
+ *  cada SUBPASTA vira uma categoria e os arquivos da raiz caem em "Geral".
+ *  Requer `Sites.Read.All` (ou `Files.Read.All`) Application no registro do app. */
+export async function listarDocsDoShare(shareUrl: string, forcar = false): Promise<PoliticaDoc[]> {
+  const url = (shareUrl || "").trim();
+  if (!graphEnabled || !url) return [];
+  const cacheado = docsCache.get(url);
+  if (!forcar && cacheado && Date.now() - cacheado.em < DOCS_TTL_MS) return cacheado.docs;
   try {
-    const shareId = encodeShareUrl(config.politicas.shareUrl);
+    const shareId = encodeShareUrl(url);
     const root = await graphGet<any>(`/shares/${shareId}/driveItem?$select=id,parentReference`);
     const driveId: string | undefined = root?.parentReference?.driveId;
     const rootId: string | undefined = root?.id;
@@ -602,11 +609,21 @@ export async function getPoliticas(): Promise<PoliticaDoc[]> {
         (a.categoria ?? "").localeCompare(b.categoria ?? "", "pt-BR") ||
         a.nome.localeCompare(b.nome, "pt-BR"),
     );
+    docsCache.set(url, { em: Date.now(), docs });
     return docs;
   } catch (e) {
-    console.warn("[graph] getPoliticas falhou:", (e as Error).message);
-    return [];
+    console.warn("[graph] listarDocsDoShare falhou:", (e as Error).message);
+    // Falhou agora mas tem cache anterior: melhor servir o antigo do que uma lista vazia.
+    return cacheado?.docs ?? [];
   }
+}
+
+/** Documentos de política (a pasta configurada em Administração › Integração).
+ *  Sem Graph => docs DEMO (preview navegável). Com Graph mas sem a pasta configurada
+ *  => lista vazia (a página mostra o aviso de configuração). */
+export async function getPoliticas(): Promise<PoliticaDoc[]> {
+  if (!graphEnabled) return mockPoliticas();
+  return listarDocsDoShare(config.politicas.shareUrl);
 }
 
 /** Quem está de férias/ausente: lê automaticRepliesSetting (out-of-office) via Graph.
