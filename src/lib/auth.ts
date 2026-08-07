@@ -352,8 +352,20 @@ export async function initAuth(): Promise<void> {
         // Falhou logo após voltar do Entra (com resposta na URL) → redemption cross-origin
         // recusada = a URI não está como SPA no App Registration. Marca o erro para o gate
         // explicar, em vez de redirecionar de novo e entrar em loop.
-        if (voltandoDoEntra) marcarErroConfigSpa();
-        acct = accountsForTenant(app)[0] ?? null;
+        //
+        // CRÍTICO: aqui NÃO adotamos conta em cache. Se o usuário já logou antes, o localStorage
+        // guarda uma conta ANTIGA — mas a troca code→token acabou de FALHAR, então essa conta é
+        // inútil (o acquireTokenSilent seguinte também falha → sem Bearer → /api/me devolve
+        // `origem:"nenhuma"` → o AuthGate re-dispara o SSO → LOOP). Pior: o bloco `if (acct)`
+        // abaixo chamaria limparErroConfigSpa(), APAGANDO o diagnóstico que acabamos de marcar.
+        // Mantendo acct=null, o `if (erroConfigSpa()) return` mostra o gate com a instrução exata
+        // (registrar esta URI como SPA) em vez de girar em loop.
+        if (voltandoDoEntra) {
+          marcarErroConfigSpa();
+          acct = null;
+        } else {
+          acct = accountsForTenant(app)[0] ?? null;
+        }
       }
 
       if (acct) {
