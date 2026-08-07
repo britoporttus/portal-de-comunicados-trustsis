@@ -1,6 +1,10 @@
-// MARCA DO PORTAL — o admin carrega o logo exibido na navbar, em duas versões:
-//  · menu ABERTO (horizontal, com o nome da empresa)
-//  · menu RECOLHIDO (quadrado / só o símbolo) — opcional: sem ele o portal reusa o expandido
+// MARCA DO PORTAL — o admin carrega o logo exibido na navbar, em quatro variações:
+//  · menu ABERTO (horizontal, com o nome da empresa) × tema CLARO e tema ESCURO
+//  · menu RECOLHIDO (quadrado / só o símbolo) × tema CLARO e tema ESCURO
+// Só o "aberto / tema claro" é essencial: qualquer slot vazio cai na variante mais próxima
+// (recolhido → aberto; escuro → claro), então quem tem um logo único segue com ele nos dois
+// temas. A pré-visualização mostra cada logo sobre o fundo REAL do tema correspondente, para
+// o admin flagrar logo escuro sumindo no tema escuro (foi exatamente o pedido do usuário).
 //
 // O arquivo escolhido NÃO vai para o disco do servidor: é reduzido no navegador e guardado
 // como data URL PNG (ou SVG, que passa direto) no store, junto do resto da configuração —
@@ -8,7 +12,7 @@
 // de pasta de uploads, e a leitura (`GET /api/marca`) é pública, para o logo aparecer também
 // antes do login.
 import { useEffect, useRef, useState } from "react";
-import { Image as ImageIcon, Upload, Trash2, Check } from "lucide-react";
+import { Image as ImageIcon, Upload, Trash2, Check, Sun, Moon } from "lucide-react";
 import { api } from "@/lib/api";
 import { prepararLogo } from "@/lib/image";
 import { tempoRelativo } from "@/lib/format";
@@ -18,9 +22,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function MarcaAdmin() {
   const { marca, setMarca } = usePortal();
-  // Rascunho local: o admin troca/remove os dois logos e confirma com "Salvar".
+  // Rascunho local: o admin troca/remove os quatro logos e confirma com "Salvar".
   const [expandido, setExpandido] = useState("");
   const [colapsado, setColapsado] = useState("");
+  const [expandidoEscuro, setExpandidoEscuro] = useState("");
+  const [colapsadoEscuro, setColapsadoEscuro] = useState("");
   const [pronto, setPronto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -31,19 +37,29 @@ export function MarcaAdmin() {
     if (pronto || !marca) return;
     setExpandido(marca.logoExpandido ?? "");
     setColapsado(marca.logoColapsado ?? "");
+    setExpandidoEscuro(marca.logoExpandidoEscuro ?? "");
+    setColapsadoEscuro(marca.logoColapsadoEscuro ?? "");
     setPronto(true);
   }, [marca, pronto]);
 
   const alterado =
-    expandido !== (marca?.logoExpandido ?? "") || colapsado !== (marca?.logoColapsado ?? "");
+    expandido !== (marca?.logoExpandido ?? "") ||
+    colapsado !== (marca?.logoColapsado ?? "") ||
+    expandidoEscuro !== (marca?.logoExpandidoEscuro ?? "") ||
+    colapsadoEscuro !== (marca?.logoColapsadoEscuro ?? "");
 
   const salvar = async () => {
     setSalvando(true);
     setErro(null);
     setOk(false);
     try {
-      // Envia os dois campos sempre: string vazia = remover aquele logo no backend.
-      const salvo = await api.marca.save({ logoExpandido: expandido, logoColapsado: colapsado });
+      // Envia os quatro campos sempre: string vazia = remover aquele logo no backend.
+      const salvo = await api.marca.save({
+        logoExpandido: expandido,
+        logoColapsado: colapsado,
+        logoExpandidoEscuro: expandidoEscuro,
+        logoColapsadoEscuro: colapsadoEscuro,
+      });
       setMarca(salvo); // navbar atualiza na hora, sem F5
       setOk(true);
     } catch (e) {
@@ -54,10 +70,11 @@ export function MarcaAdmin() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Logo exibido no topo do menu. Envie PNG com fundo transparente (ou SVG) para ficar bem
-        nos temas claro e escuro. Sem logo carregado, o portal usa a marca padrão.
+        Logo exibido no topo do menu. Envie PNG com fundo transparente (ou SVG). Você pode enviar
+        uma versão específica para o <strong>tema escuro</strong> — deixe em branco para reusar a do
+        tema claro. Sem nenhum logo carregado, o portal usa a marca padrão.
       </p>
 
       {erro && (
@@ -66,30 +83,40 @@ export function MarcaAdmin() {
         </Alert>
       )}
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <CampoLogo
-          titulo="Menu aberto"
-          descricao="Versão horizontal, com o nome da empresa. Exibida com 36px de altura."
-          valor={expandido}
-          onChange={(v) => {
-            setExpandido(v);
-            setOk(false);
-          }}
-          onErro={setErro}
-          quadrado={false}
-        />
-        <CampoLogo
-          titulo="Menu recolhido"
-          descricao="Versão quadrada (só o símbolo). Opcional — sem ela reusamos a de cima."
-          valor={colapsado}
-          onChange={(v) => {
-            setColapsado(v);
-            setOk(false);
-          }}
-          onErro={setErro}
-          quadrado
-        />
-      </div>
+      <SecaoTema
+        icone={<Sun className="size-4" />}
+        titulo="Tema claro"
+        tema="claro"
+        expandido={expandido}
+        colapsado={colapsado}
+        setExpandido={(v) => {
+          setExpandido(v);
+          setOk(false);
+        }}
+        setColapsado={(v) => {
+          setColapsado(v);
+          setOk(false);
+        }}
+        onErro={setErro}
+      />
+
+      <SecaoTema
+        icone={<Moon className="size-4" />}
+        titulo="Tema escuro"
+        tema="escuro"
+        opcional
+        expandido={expandidoEscuro}
+        colapsado={colapsadoEscuro}
+        setExpandido={(v) => {
+          setExpandidoEscuro(v);
+          setOk(false);
+        }}
+        setColapsado={(v) => {
+          setColapsadoEscuro(v);
+          setOk(false);
+        }}
+        onErro={setErro}
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={salvar} disabled={salvando || !alterado}>
@@ -111,7 +138,63 @@ export function MarcaAdmin() {
   );
 }
 
-/** Um slot de logo: pré-visualização (em xadrez, para revelar transparência) + enviar/remover. */
+/** Bloco de um tema: o par aberto + recolhido, com o cabeçalho (Sol/Lua) do tema. */
+function SecaoTema({
+  icone,
+  titulo,
+  tema,
+  opcional,
+  expandido,
+  colapsado,
+  setExpandido,
+  setColapsado,
+  onErro,
+}: {
+  icone: React.ReactNode;
+  titulo: string;
+  tema: "claro" | "escuro";
+  opcional?: boolean;
+  expandido: string;
+  colapsado: string;
+  setExpandido: (v: string) => void;
+  setColapsado: (v: string) => void;
+  onErro: (e: string | null) => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+        {icone} {titulo}
+        {opcional && (
+          <span className="text-xs font-normal text-muted-foreground">
+            (opcional — reusa o tema claro se vazio)
+          </span>
+        )}
+      </h3>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CampoLogo
+          titulo="Menu aberto"
+          descricao="Versão horizontal, com o nome da empresa. Exibida com 36px de altura."
+          valor={expandido}
+          onChange={setExpandido}
+          onErro={onErro}
+          quadrado={false}
+          tema={tema}
+        />
+        <CampoLogo
+          titulo="Menu recolhido"
+          descricao="Versão quadrada (só o símbolo). Opcional — sem ela reusamos a de cima."
+          valor={colapsado}
+          onChange={setColapsado}
+          onErro={onErro}
+          quadrado
+          tema={tema}
+        />
+      </div>
+    </section>
+  );
+}
+
+/** Um slot de logo: pré-visualização sobre o fundo REAL do tema + enviar/remover. */
 function CampoLogo({
   titulo,
   descricao,
@@ -119,6 +202,7 @@ function CampoLogo({
   onChange,
   onErro,
   quadrado,
+  tema,
 }: {
   titulo: string;
   descricao: string;
@@ -126,6 +210,7 @@ function CampoLogo({
   onChange: (v: string) => void;
   onErro: (e: string | null) => void;
   quadrado: boolean;
+  tema: "claro" | "escuro";
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [lendo, setLendo] = useState(false);
@@ -151,19 +236,25 @@ function CampoLogo({
     }
   };
 
+  // Fundo REAL de cada tema (a navbar usa a superfície do sidebar). Assim o admin vê o logo
+  // exatamente como aparecerá — e um logo escuro sumindo no tema escuro fica óbvio aqui.
+  const fundo = tema === "escuro" ? "#0b1220" : "#ffffff";
+
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+      <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
         <ImageIcon className="size-4 text-primary" /> {titulo}
-      </h3>
+      </h4>
       <p className="mt-1 text-xs text-muted-foreground">{descricao}</p>
 
       <div
         className="mt-3 flex items-center justify-center rounded-xl border border-dashed border-border p-4"
-        // Xadrez discreto: mostra se o PNG realmente tem fundo transparente.
+        // Fundo do tema + xadrez discreto por cima: mostra o logo no contexto real e ainda
+        // revela se o PNG tem fundo transparente.
         style={{
+          backgroundColor: fundo,
           backgroundImage:
-            "linear-gradient(45deg, var(--muted) 25%, transparent 25%, transparent 75%, var(--muted) 75%), linear-gradient(45deg, var(--muted) 25%, transparent 25%, transparent 75%, var(--muted) 75%)",
+            "linear-gradient(45deg, rgba(128,128,128,0.18) 25%, transparent 25%, transparent 75%, rgba(128,128,128,0.18) 75%), linear-gradient(45deg, rgba(128,128,128,0.18) 25%, transparent 25%, transparent 75%, rgba(128,128,128,0.18) 75%)",
           backgroundSize: "16px 16px",
           backgroundPosition: "0 0, 8px 8px",
         }}
@@ -175,7 +266,12 @@ function CampoLogo({
             className={quadrado ? "size-10 object-contain" : "h-10 w-auto max-w-[220px] object-contain"}
           />
         ) : (
-          <span className="py-2 text-xs text-muted-foreground">Usando o logo padrão</span>
+          <span
+            className="py-2 text-xs"
+            style={{ color: tema === "escuro" ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)" }}
+          >
+            Usando o logo padrão
+          </span>
         )}
       </div>
 

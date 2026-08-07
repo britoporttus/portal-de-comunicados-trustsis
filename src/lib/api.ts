@@ -228,7 +228,12 @@ export const api = {
   marca: {
     get: () => req<Marca>("/marca"),
     // Campo ausente = não mexe; string vazia = remove aquele logo (volta ao padrão do build).
-    save: (b: Partial<Pick<Marca, "logoExpandido" | "logoColapsado">>, upn?: string) =>
+    save: (
+      b: Partial<
+        Pick<Marca, "logoExpandido" | "logoColapsado" | "logoExpandidoEscuro" | "logoColapsadoEscuro">
+      >,
+      upn?: string,
+    ) =>
       req<Marca>(comUpn("/marca", upn), { method: "PUT", body: JSON.stringify(b) }),
   },
 

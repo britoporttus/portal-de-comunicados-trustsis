@@ -66,6 +66,8 @@ app.get("/api/marca", (_req, res) => {
   res.json({
     logoExpandido: m.logoExpandido ?? "",
     logoColapsado: m.logoColapsado ?? "",
+    logoExpandidoEscuro: m.logoExpandidoEscuro ?? "",
+    logoColapsadoEscuro: m.logoColapsadoEscuro ?? "",
     atualizadoEm: m.atualizadoEm,
     atualizadoPor: m.atualizadoPor,
   });
@@ -79,7 +81,9 @@ app.use("/api", requireAuth);
 app.put("/api/marca", requerPerm("perfis", "editar"), (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const quem = upnDaRequisicao(req);
-  const CAMPOS = ["logoExpandido", "logoColapsado"] as const;
+  // Quatro slots: aberto/recolhido × tema claro/escuro. Os "escuro" são opcionais — vazios,
+  // o portal reusa o do tema claro (ver src/components/portal/shared.tsx › Brand).
+  const CAMPOS = ["logoExpandido", "logoColapsado", "logoExpandidoEscuro", "logoColapsadoEscuro"] as const;
   for (const k of CAMPOS) {
     if (!(k in body)) continue;
     const v = String(body[k] ?? "").trim();

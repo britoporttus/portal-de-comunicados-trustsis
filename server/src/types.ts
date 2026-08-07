@@ -285,10 +285,14 @@ export interface Store {
  *  upload, e um logo é pequeno o suficiente para caber no JSON (o front reduz antes de
  *  enviar). `logoColapsado` vazio = reusa o expandido; ambos vazios = logo padrão do build. */
 export interface Marca {
-  /** Logo do menu ABERTO (horizontal, com o nome da empresa). */
+  /** Logo do menu ABERTO (horizontal, com o nome da empresa) — TEMA CLARO. */
   logoExpandido?: string;
-  /** Logo do menu RECOLHIDO (quadrado / só o símbolo). */
+  /** Logo do menu RECOLHIDO (quadrado / só o símbolo) — TEMA CLARO. */
   logoColapsado?: string;
+  /** Versão do logo ABERTO para o TEMA ESCURO. Vazio = reusa o do tema claro. */
+  logoExpandidoEscuro?: string;
+  /** Versão do logo RECOLHIDO para o TEMA ESCURO. Vazio = reusa o do tema claro. */
+  logoColapsadoEscuro?: string;
   atualizadoEm?: string;
   atualizadoPor?: string;
 }

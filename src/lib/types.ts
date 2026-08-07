@@ -340,10 +340,14 @@ export interface IntegracaoConfig {
 // ---- Marca do portal (logo da navbar), carregada em Administração › Marca ----
 // Data URL (PNG/SVG) guardada no store do backend. Vazio = logo padrão do build.
 export interface Marca {
-  /** Logo do menu ABERTO (horizontal, com o nome). */
+  /** Logo do menu ABERTO (horizontal, com o nome) — TEMA CLARO. */
   logoExpandido: string;
-  /** Logo do menu RECOLHIDO (quadrado). Vazio = reusa o expandido. */
+  /** Logo do menu RECOLHIDO (quadrado) — TEMA CLARO. Vazio = reusa o expandido. */
   logoColapsado: string;
+  /** Logo do menu ABERTO no TEMA ESCURO. Vazio = reusa o do tema claro. */
+  logoExpandidoEscuro?: string;
+  /** Logo do menu RECOLHIDO no TEMA ESCURO. Vazio = reusa o do tema claro. */
+  logoColapsadoEscuro?: string;
   atualizadoEm?: string;
   atualizadoPor?: string;
 }

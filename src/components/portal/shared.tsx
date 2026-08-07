@@ -105,16 +105,25 @@ export function LinkIcon({
  * Marca do portal. Dois modos:
  *  - PERSONALIZADA: o admin carregou um logo em Administração › Marca (data URL servido pelo
  *    backend). Mostra o logo do menu ABERTO ou o do RECOLHIDO — o recolhido cai no expandido
- *    quando não foi enviado, e vice-versa.
+ *    quando não foi enviado, e vice-versa. Cada um tem ainda uma variante por TEMA: no escuro
+ *    usamos o logo "escuro" e, se ele não existir, o do tema claro (e vice-versa).
  *  - PADRÃO (nada carregado): o logo TrustSis embutido no build, dividido em duas partes — os
  *    4 quadrados (mark), sempre visíveis, e o wordmark, que expande/recolhe com animação.
  * Em ambos os casos o PNG é transparente (sem caixa branca).
  */
 export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
-  const { marca } = usePortal();
-  const personalizado = collapsed
-    ? marca?.logoColapsado || marca?.logoExpandido
-    : marca?.logoExpandido || marca?.logoColapsado;
+  const { marca, theme } = usePortal();
+  // Preferência por tema, com queda para a outra variante: quem só carregou UM logo continua
+  // vendo o mesmo nos dois temas (nada quebra para quem já tinha marca configurada).
+  const escuro = theme === "dark";
+  const primeiro = (...c: (string | undefined)[]) => c.find(Boolean) || "";
+  const expandido = escuro
+    ? primeiro(marca?.logoExpandidoEscuro, marca?.logoExpandido)
+    : primeiro(marca?.logoExpandido, marca?.logoExpandidoEscuro);
+  const colapsado = escuro
+    ? primeiro(marca?.logoColapsadoEscuro, marca?.logoColapsado)
+    : primeiro(marca?.logoColapsado, marca?.logoColapsadoEscuro);
+  const personalizado = collapsed ? colapsado || expandido : expandido || colapsado;
 
   if (personalizado) {
     return (
