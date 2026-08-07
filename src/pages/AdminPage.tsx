@@ -1,13 +1,13 @@
 // ADMINISTRAÇÃO — página ÚNICA com tudo que é de admin do portal (só aparece para quem tem
 // perfil admin; a rota é protegida em App.tsx e cada endpoint é validado no backend).
-// Abas: Perfis de acesso (RBAC) • Bibliotecas de documentos • Atalhos da empresa •
-// Integração • Atividade de pontos (auditoria) • Diagnóstico.
+// Abas: Perfis de acesso (RBAC) • Bibliotecas de documentos • Atalhos da empresa • Marca
+// (logo da navbar) • Integração • Atividade de pontos (auditoria) • Diagnóstico.
 // Novas capacidades de admin (bibliotecas, links por perfil, auditoria…) entram aqui como
 // novas abas, em vez de virarem itens soltos no menu.
 import { useMemo, useState } from "react";
 import {
   ShieldCheck, Activity, Stethoscope, Users, LayoutList, Wifi, WifiOff, PlugZap,
-  FolderOpen, LayoutGrid,
+  FolderOpen, LayoutGrid, Palette,
 } from "lucide-react";
 import { usePortal } from "@/context/PortalProvider";
 import { api } from "@/lib/api";
@@ -22,6 +22,7 @@ import { PerfisAdmin } from "@/components/admin/PerfisAdmin";
 import { IntegracaoAdmin } from "@/components/admin/IntegracaoAdmin";
 import { BibliotecasAdmin } from "@/components/admin/BibliotecasAdmin";
 import { AtalhosAdmin } from "@/components/admin/AtalhosAdmin";
+import { MarcaAdmin } from "@/components/admin/MarcaAdmin";
 import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { ScanStatus } from "@/components/portal/ScanStatus";
 
@@ -48,6 +49,9 @@ export default function AdminPage() {
           <TabsTrigger value="atalhos">
             <LayoutGrid className="size-4" /> Atalhos da empresa
           </TabsTrigger>
+          <TabsTrigger value="marca">
+            <Palette className="size-4" /> Marca
+          </TabsTrigger>
           <TabsTrigger value="integracao">
             <PlugZap className="size-4" /> Integração
           </TabsTrigger>
@@ -71,6 +75,11 @@ export default function AdminPage() {
         {/* Fase 2: links institucionais e dashboards externos exibidos em Links úteis. */}
         <TabsContent value="atalhos">
           <AtalhosAdmin />
+        </TabsContent>
+
+        {/* Logo da navbar (menu aberto e recolhido) carregado pelo admin. */}
+        <TabsContent value="marca">
+          <MarcaAdmin />
         </TabsContent>
 
         {/* SSO / Entra ID / Graph / ITSM — configuração que antes vivia só no .env. */}

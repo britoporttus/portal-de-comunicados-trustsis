@@ -21,7 +21,7 @@ import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
   Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus,
-  Biblioteca, Acesso,
+  Biblioteca, Acesso, Marca,
 } from "./types.js";
 
 const app = express();
@@ -57,8 +57,50 @@ app.get("/api/config/auth", (_req, res) => {
 // login é impossível) vale a ÚNICA identidade sancionada pelo admin em Administração ›
 // Integração — ver server/src/auth.ts › requireAuth.
 
+// ---------- marca / logo do portal (LEITURA pública, ANTES da barreira) ----------
+// O logo da navbar é carregado pelo admin (Administração › Marca) e guardado como data URL
+// no store. A leitura fica antes do requireAuth de propósito: o logo é informação pública da
+// empresa e o portal já o mostra na moldura da tela de login (gate), sem token.
+app.get("/api/marca", (_req, res) => {
+  const m = getStore().marca ?? {};
+  res.json({
+    logoExpandido: m.logoExpandido ?? "",
+    logoColapsado: m.logoColapsado ?? "",
+    atualizadoEm: m.atualizadoEm,
+    atualizadoPor: m.atualizadoPor,
+  });
+});
+
 // Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando desligada).
 app.use("/api", requireAuth);
+
+// Grava/limpa os logos. Campo AUSENTE = não mexe; string vazia = remove aquele logo (volta
+// ao padrão do build). Mesma permissão da configuração do portal (recurso "perfis").
+app.put("/api/marca", requerPerm("perfis", "editar"), (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const quem = upnDaRequisicao(req);
+  const CAMPOS = ["logoExpandido", "logoColapsado"] as const;
+  for (const k of CAMPOS) {
+    if (!(k in body)) continue;
+    const v = String(body[k] ?? "").trim();
+    // Só aceitamos data URL de imagem (o front converte o arquivo escolhido) ou vazio.
+    if (v && !/^data:image\/(png|jpeg|webp|svg\+xml);/i.test(v)) {
+      return res.status(400).json({ error: `Logo inválido em ${k}: envie PNG, JPEG, WEBP ou SVG.` });
+    }
+  }
+  const salvo = mutate((s) => {
+    const atual: Marca = { ...(s.marca ?? {}) };
+    for (const k of CAMPOS) {
+      if (!(k in body)) continue;
+      atual[k] = String(body[k] ?? "").trim();
+    }
+    atual.atualizadoEm = new Date().toISOString();
+    if (quem) atual.atualizadoPor = quem;
+    s.marca = atual;
+    return atual;
+  });
+  res.json(salvo);
+});
 
 // ---------- integração (SSO / Entra ID / Graph / ITSM) editável em Administração ----------
 // Tudo que antes vivia só no .env agora é gerido aqui. O .env continua sendo o BOOTSTRAP

@@ -7,6 +7,7 @@ import {
   Building2, type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { usePortal } from "@/context/PortalProvider";
 import { cn } from "@/lib/utils";
 import { CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
 import type { Categoria, Prioridade } from "@/lib/types";
@@ -101,11 +102,39 @@ export function LinkIcon({
 }
 
 /**
- * Marca do portal. O logo é dividido em duas partes: os 4 quadrados (mark), sempre visíveis,
- * e o wordmark "TrustSis consultoria", que expande/recolhe com animação conforme o menu.
- * Ambos usam o PNG transparente (sem caixa branca).
+ * Marca do portal. Dois modos:
+ *  - PERSONALIZADA: o admin carregou um logo em Administração › Marca (data URL servido pelo
+ *    backend). Mostra o logo do menu ABERTO ou o do RECOLHIDO — o recolhido cai no expandido
+ *    quando não foi enviado, e vice-versa.
+ *  - PADRÃO (nada carregado): o logo TrustSis embutido no build, dividido em duas partes — os
+ *    4 quadrados (mark), sempre visíveis, e o wordmark, que expande/recolhe com animação.
+ * Em ambos os casos o PNG é transparente (sem caixa branca).
  */
 export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+  const { marca } = usePortal();
+  const personalizado = collapsed
+    ? marca?.logoColapsado || marca?.logoExpandido
+    : marca?.logoExpandido || marca?.logoColapsado;
+
+  if (personalizado) {
+    return (
+      <Link
+        to="/"
+        onClick={onNavigate}
+        aria-label="Página inicial"
+        className="flex items-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <img
+          src={personalizado}
+          alt="Logo da empresa"
+          // Recolhido: quadrado de 36px (cabe no trilho de 64px do menu). Aberto: altura fixa,
+          // largura livre até o limite que cabe na sidebar de 256px.
+          className={cn("h-9 object-contain", collapsed ? "w-9" : "w-auto max-w-[190px]")}
+        />
+      </Link>
+    );
+  }
+
   return (
     <Link
       to="/"

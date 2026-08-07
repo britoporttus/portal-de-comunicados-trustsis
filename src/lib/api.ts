@@ -5,7 +5,7 @@ import type {
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
   Reporte, ReporteTipo, ReporteStatus, PoliticaDoc, Biblioteca,
-  Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig,
+  Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig, Marca,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -220,6 +220,16 @@ export const api = {
       req<{ ok: boolean; detalhe: string; grupos?: number }>(comUpn("/integracao/testar", upn), {
         method: "POST",
       }),
+  },
+
+  // ---- Marca do portal (logo da navbar), gerida em Administração › Marca ----
+  // A LEITURA é pública (fica antes da barreira no backend, para o logo aparecer também na
+  // tela de login); só a gravação exige permissão de administração.
+  marca: {
+    get: () => req<Marca>("/marca"),
+    // Campo ausente = não mexe; string vazia = remove aquele logo (volta ao padrão do build).
+    save: (b: Partial<Pick<Marca, "logoExpandido" | "logoColapsado">>, upn?: string) =>
+      req<Marca>(comUpn("/marca", upn), { method: "PUT", body: JSON.stringify(b) }),
   },
 
   // Opções de perfil (id+nome) para o seletor de segregação dos artefatos (Fase 1).

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { authAtivo, emIframe, login, temSessao, trocarConta } from "@/lib/auth";
-import type { Acao, Me } from "@/lib/types";
+import type { Acao, Marca, Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
 
@@ -38,6 +38,11 @@ interface PortalState {
   setBackground: (id: string) => void;
   colorTheme: string; // id do tema de cor escolhido (ver lib/themes)
   setColorTheme: (id: string) => void;
+  /** Logos da navbar carregados pelo admin (Administração › Marca). null = ainda carregando
+   *  ou nada configurado → o Brand usa o logo padrão do build. */
+  marca: Marca | null;
+  /** Aplica a marca recém-salva no admin sem exigir F5 (o Brand lê deste contexto). */
+  setMarca: (m: Marca) => void;
 }
 
 const Ctx = createContext<PortalState | null>(null);
@@ -60,6 +65,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const [colorTheme, setColorThemeState] = useState<string>(
     () => localStorage.getItem("ts-color") || DEFAULT_COLOR_THEME,
   );
+  const [marca, setMarca] = useState<Marca | null>(null);
 
   useEffect(() => {
     applyTheme(theme);
@@ -109,6 +115,23 @@ export function PortalProvider({ children }: { children: ReactNode }) {
         if (alive) setLoading(false);
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Marca (logo da navbar): busca SEPARADA do `me` de propósito — é pública e não deve
+  // depender de identidade, então o logo do cliente aparece mesmo antes do login.
+  useEffect(() => {
+    let alive = true;
+    api.marca
+      .get()
+      .then((m) => {
+        if (alive) setMarca(m);
+      })
+      .catch(() => {
+        /* sem marca configurada / backend antigo → logo padrão do build */
+      });
     return () => {
       alive = false;
     };
@@ -181,7 +204,7 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, needsLogin, login: entrar, trocarConta: trocar, isAdmin, perfis, paginas, pode, podeVerPagina, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
+      value={{ me, loading, mode, needsLogin, login: entrar, trocarConta: trocar, isAdmin, perfis, paginas, pode, podeVerPagina, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme, marca, setMarca }}
     >
       {children}
     </Ctx.Provider>

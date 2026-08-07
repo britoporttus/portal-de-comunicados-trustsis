@@ -275,6 +275,22 @@ export interface Store {
   // Configuração de integração (SSO/Entra, Graph, políticas, ITSM) editada em Administração.
   // Opcional: sem ela o portal cai no .env (bootstrap) — store antigo não reseta.
   integracao?: Integracao;
+  // Identidade visual carregada pelo admin (logo da navbar). Opcional → sem ela o portal
+  // usa o logo padrão embutido no build.
+  marca?: Marca;
+}
+
+/** MARCA do portal (Administração › Marca): logos carregados pelo admin e exibidos na navbar.
+ *  Guardados como DATA URL (PNG/SVG) no store: o portal não serve arquivos enviados por
+ *  upload, e um logo é pequeno o suficiente para caber no JSON (o front reduz antes de
+ *  enviar). `logoColapsado` vazio = reusa o expandido; ambos vazios = logo padrão do build. */
+export interface Marca {
+  /** Logo do menu ABERTO (horizontal, com o nome da empresa). */
+  logoExpandido?: string;
+  /** Logo do menu RECOLHIDO (quadrado / só o símbolo). */
+  logoColapsado?: string;
+  atualizadoEm?: string;
+  atualizadoPor?: string;
 }
 
 /** Configuração de integração persistida (ver server/src/settings.ts).

@@ -336,3 +336,14 @@ export interface IntegracaoConfig {
   atualizadoEm?: string; // ISO
   atualizadoPor?: string; // UPN de quem salvou
 }
+
+// ---- Marca do portal (logo da navbar), carregada em Administração › Marca ----
+// Data URL (PNG/SVG) guardada no store do backend. Vazio = logo padrão do build.
+export interface Marca {
+  /** Logo do menu ABERTO (horizontal, com o nome). */
+  logoExpandido: string;
+  /** Logo do menu RECOLHIDO (quadrado). Vazio = reusa o expandido. */
+  logoColapsado: string;
+  atualizadoEm?: string;
+  atualizadoPor?: string;
+}
