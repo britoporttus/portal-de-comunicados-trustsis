@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import logo from "@/assets/logo-trustsis.png";
 import { usePortal } from "@/context/PortalProvider";
-import { authAtivo, emIframe } from "@/lib/auth";
+import { authAtivo, emIframe, erroConfigSpa } from "@/lib/auth";
 
 // GATE DE ACESSO. A porta de entrada do portal é a HOME — este componente só aparece quando
 // não há usuário identificado, e existe justamente para o portal NUNCA exibir conteúdo
@@ -27,7 +27,11 @@ export default function AuthGate() {
   // reautenticar não resolve NADA — mandar o usuário ao SSO de novo só produziria ida e volta.
   // Então a tela para de empurrar login e diz o que realmente está acontecendo.
   const tokenSemDiretorio = me?.origem === "token";
-  const podeTentarLogin = !embutido && ssoLigado && !tokenSemDiretorio;
+  // Voltamos do Entra mas a troca code→token foi recusada: a URI deste endereço não está
+  // registrada como "Single-page application" no App Registration. Reautenticar só recria o
+  // loop, então a tela para de empurrar login e diz EXATAMENTE o que ajustar no Entra.
+  const configSpa = !embutido && ssoLigado && erroConfigSpa();
+  const podeTentarLogin = !embutido && ssoLigado && !tokenSemDiretorio && !configSpa;
   // Sem SSO configurado não há login a disparar: a tela é informativa (ex.: backend fora do ar).
   const [redirecting, setRedirecting] = useState(podeTentarLogin);
   const [erro, setErro] = useState<string | null>(null);
@@ -70,11 +74,13 @@ export default function AuthGate() {
         />
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Acesso restrito</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {tokenSemDiretorio
-            ? "Sua conta foi autenticada, mas não localizamos seu usuário no diretório do Entra ID."
-            : embutido
-              ? "O portal só exibe conteúdo para um usuário identificado."
-              : "Entre com sua conta corporativa TrustSis para acessar o portal."}
+          {configSpa
+            ? "Sua conta foi autenticada, mas o portal não conseguiu concluir o login neste endereço."
+            : tokenSemDiretorio
+              ? "Sua conta foi autenticada, mas não localizamos seu usuário no diretório do Entra ID."
+              : embutido
+                ? "O portal só exibe conteúdo para um usuário identificado."
+                : "Entre com sua conta corporativa TrustSis para acessar o portal."}
         </p>
 
         {redirecting ? (
@@ -84,7 +90,9 @@ export default function AuthGate() {
           </div>
         ) : (
           <p className="mt-6 text-xs text-muted-foreground">
-            {tokenSemDiretorio
+            {configSpa
+              ? "Entrar de novo não resolve enquanto o registro do aplicativo no Entra ID não for ajustado. Avise o administrador com o endereço abaixo."
+              : tokenSemDiretorio
               ? "Entrar de novo não resolve: quem precisa de ajuste é o cadastro no diretório (ou a leitura do Microsoft Graph pelo portal). Avise o administrador — e tente com outra conta se você tiver mais de uma."
               : embutido
                 ? "A autenticação da Microsoft não funciona dentro de um quadro embutido. Abra o portal em uma aba própria para entrar com sua conta — ou defina a identidade do preview em Administração › Integração."
@@ -117,6 +125,16 @@ export default function AuthGate() {
           >
             Entrar com outra conta
           </button>
+        )}
+
+        {/* Diagnóstico do registro do app: a URI precisa estar como Single-page application. */}
+        {configSpa && (
+          <div className="mt-4 rounded-lg border border-border bg-secondary/40 p-3 text-left text-[11px] leading-snug text-muted-foreground">
+            No Entra ID › Registros de aplicativo › Autenticação, adicione este endereço na
+            plataforma <strong className="text-foreground">Single-page application</strong>{" "}
+            (não em “Web”), exatamente e sem barra no final:
+            <code className="mt-1 block break-all text-foreground">{window.location.origin}</code>
+          </div>
         )}
 
         {/* Diagnóstico do preview: o backend diz POR QUE não identificou ninguém. */}

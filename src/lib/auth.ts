@@ -205,6 +205,53 @@ function limparFalhasDeToken(): void {
   sessionStorage.removeItem(FALHAS_FLAG);
 }
 
+// ERRO DE CONFIGURAÇÃO DO APP REGISTRATION (redemption cross-origin recusada).
+//
+// Quando VOLTAMOS do Entra com uma resposta de autenticação (há `code=` na URL) e mesmo
+// assim o handleRedirectPromise falha, a causa quase sempre é uma só: a URI deste endereço
+// NÃO está registrada como "Single-page application (SPA)" no App Registration — está sob
+// "Web" (ou nem está). O Azure só permite a troca code→token cross-origin (a que a MSAL faz
+// pelo navegador) para URIs do tipo SPA; sob "Web" ela é recusada (AADSTS9002326 / CORS).
+//
+// Reautenticar NÃO resolve — só recria o loop "vai pra home e volta pro SSO". Então quando
+// detectamos isso, GRAVAMOS um flag: o initAuth para de redirecionar sozinho e o gate
+// explica exatamente o que ajustar no Entra (o endereço exato que precisa virar SPA).
+const SPA_ERRO_FLAG = "ts-auth-spa-erro";
+
+function marcarErroConfigSpa(): void {
+  try {
+    sessionStorage.setItem(SPA_ERRO_FLAG, "1");
+  } catch {
+    /* storage indisponível — ignorar */
+  }
+}
+
+function limparErroConfigSpa(): void {
+  try {
+    sessionStorage.removeItem(SPA_ERRO_FLAG);
+  } catch {
+    /* ignorar */
+  }
+}
+
+/** Voltamos do Entra com resposta, mas a troca code→token foi recusada? (URI não é SPA no
+ *  App Registration.) O gate usa isto para parar de empurrar login e explicar o ajuste. */
+export function erroConfigSpa(): boolean {
+  try {
+    return sessionStorage.getItem(SPA_ERRO_FLAG) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Havia uma resposta de autenticação na URL atual (retorno do Entra: `code`/`error`/token)?
+ *  Capturado ANTES de a MSAL consumir o hash, para sabermos se uma falha do
+ *  handleRedirectPromise foi na TROCA code→token (config de SPA) e não um mero cold-start. */
+function respostaDeAuthNaUrl(): boolean {
+  const alvo = `${window.location.hash} ${window.location.search}`;
+  return /[#?&](code|error|id_token|access_token)=/.test(alvo);
+}
+
 // Limpa o estado `interaction.status` da MSAL que pode ter ficado PRESO. Esse é o
 // segundo bug do Edge corporativo que RESTAURA abas: a MSAL grava um
 // `msal.<clientId>.interaction.status = "interaction_in_progress"` no storage enquanto
@@ -282,25 +329,43 @@ export async function initAuth(): Promise<void> {
       //    SEMPRE preferindo a conta do tenant configurado (evita a conta do outro
       //    tenant corporativo — ex.: @porttus.com — quando o usuário tem 2 contas).
       let acct: AccountInfo | null;
+      // Capturado ANTES de a MSAL consumir a URL: se falhar COM uma resposta presente, a troca
+      // code→token foi recusada (URI não registrada como SPA no Entra) — não é cold-start.
+      const voltandoDoEntra = respostaDeAuthNaUrl();
       try {
-        const res = await app.handleRedirectPromise();
+        // navigateToLoginRequestUrl: false → processa o retorno NA PRÓPRIA URL, sem um reload
+        // extra. Assim uma falha na troca code→token aparece nesta MESMA carga (senão a MSAL
+        // navegava de volta e o erro se perdia entre reloads, virando loop silencioso).
+        const res = await app.handleRedirectPromise({ navigateToLoginRequestUrl: false });
         // Guarda o idToken recém-emitido: é ele que o getAuthToken usa se o silent falhar,
         // para a 1ª chamada /api/me logo após o SSO funcionar sem redirecionar de novo.
         if (res?.idToken) ultimoIdToken = res.idToken;
         const doRedirect = isAllowedTenant(res?.account) ? res!.account : null;
         // Login novo concluído agora: zera a trava de loop (a contagem anterior era de uma
-        // sessão que já morreu).
-        if (doRedirect) limparFalhasDeToken();
+        // sessão que já morreu) e qualquer erro de config anterior.
+        if (doRedirect) {
+          limparFalhasDeToken();
+          limparErroConfigSpa();
+        }
         acct = doRedirect ?? accountsForTenant(app)[0] ?? null;
       } catch {
+        // Falhou logo após voltar do Entra (com resposta na URL) → redemption cross-origin
+        // recusada = a URI não está como SPA no App Registration. Marca o erro para o gate
+        // explicar, em vez de redirecionar de novo e entrar em loop.
+        if (voltandoDoEntra) marcarErroConfigSpa();
         acct = accountsForTenant(app)[0] ?? null;
       }
 
       if (acct) {
         app.setActiveAccount(acct);
         sessionStorage.removeItem(REDIRECT_FLAG);
+        limparErroConfigSpa();
         return;
       }
+
+      // Config de SPA quebrada: não adianta redirecionar (voltaria com o mesmo erro). Deixa o
+      // gate na tela com o diagnóstico e o endereço exato a registrar como SPA no Entra.
+      if (erroConfigSpa()) return;
 
       // 2) Sem conta utilizável → redirect ÚNICO para o Entra, SEM `prompt`. É o SSO que o
       //    portal precisa: no Edge corporativo (o navegador oficial da plataforma) a sessão
@@ -377,6 +442,7 @@ export async function login(trocar = false): Promise<boolean> {
   await app.initialize();
   clearStaleInteraction();
   limparFalhasDeToken(); // gesto explícito do usuário: recomeça do zero
+  limparErroConfigSpa(); // pode ter ajustado o registro no Entra: dá outra chance ao SSO
 
   markRedirect();
   await robustLoginRedirect(app, trocar ? "select_account" : undefined);
