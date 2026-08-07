@@ -138,6 +138,13 @@ function instance(): PublicClientApplication {
         authority: `https://login.microsoftonline.com/${tenantAtual()}`,
         redirectUri: window.location.origin,
         postLogoutRedirectUri: window.location.origin,
+        // EMBUTIDO EM IFRAME (preview do Hive): o navegador PARTICIONA o armazenamento do
+        // iframe, então o BroadcastChannel que o popup do Entra usa para devolver a resposta
+        // nunca chega até aqui — o login concluía na janela da Microsoft e o portal ficava
+        // preso em "Aguardando o login…". Esta página de relay (mesma origem, aberta como
+        // janela TOP-LEVEL) recebe a resposta e a repassa por postMessage. Não é redirectUri:
+        // não precisa de cadastro no Azure. Ver src/msalRelay.ts.
+        popupRelayUri: "/msal-relay.html",
       },
       cache: { cacheLocation: "localStorage" },
     });
@@ -168,6 +175,25 @@ function redirectInFlight(): boolean {
 /** Marca o instante do redirect que estamos prestes a disparar. */
 function markRedirect(): void {
   sessionStorage.setItem(REDIRECT_FLAG, String(Date.now()));
+}
+
+// TRAVA DE LOOP DE REAUTENTICAÇÃO. Quando a renovação silenciosa falha, o caminho normal é
+// reautenticar por redirect — mas se ela falhar SEMPRE (o caso do iframe de renovação que
+// não conseguia responder), o portal entra em ping-pong com o Entra: entra, pisca a tela e
+// volta pro seletor de conta, indefinidamente. Contamos as falhas na ABA: passado o limite,
+// paramos de redirecionar e deixamos o gate/portal na tela — o usuário decide (botão
+// "Entrar"), em vez de ficar refém do loop.
+const FALHAS_FLAG = "ts-auth-falhas";
+const MAX_FALHAS_SILENT = 2;
+
+function registrarFalhaDeToken(): number {
+  const n = Number(sessionStorage.getItem(FALHAS_FLAG) ?? 0) + 1;
+  sessionStorage.setItem(FALHAS_FLAG, String(n));
+  return n;
+}
+
+function limparFalhasDeToken(): void {
+  sessionStorage.removeItem(FALHAS_FLAG);
 }
 
 // Limpa o estado `interaction.status` da MSAL que pode ter ficado PRESO. Esse é o
@@ -235,10 +261,13 @@ export async function initAuth(): Promise<void> {
       // 1) Retorno de redirect (ou conta em cache/localStorage de uma visita anterior).
       //    SEMPRE preferindo a conta do tenant configurado (evita a conta do outro
       //    tenant corporativo — ex.: @porttus.com — quando o usuário tem 2 contas).
-      let acct: AccountInfo | null = null;
+      let acct: AccountInfo | null;
       try {
         const res = await app.handleRedirectPromise();
         const doRedirect = isAllowedTenant(res?.account) ? res!.account : null;
+        // Login novo concluído agora: zera a trava de loop (a contagem anterior era de uma
+        // sessão que já morreu).
+        if (doRedirect) limparFalhasDeToken();
         acct = doRedirect ?? accountsForTenant(app)[0] ?? null;
       } catch {
         acct = accountsForTenant(app)[0] ?? null;
@@ -293,6 +322,7 @@ export async function getAuthToken(): Promise<string | null> {
       scopes: LOGIN_SCOPES,
       account,
     });
+    limparFalhasDeToken();
     return result.idToken ?? null;
   } catch {
     // QUALQUER falha do silent (token expirado, iframe de renovação bloqueado por
@@ -302,6 +332,9 @@ export async function getAuthToken(): Promise<string | null> {
     // Embutido (preview): não há redirect possível — devolve null e o gate reaparece
     // para o usuário reautenticar por popup (com gesto).
     if (emIframe()) return null;
+    // Falhou de novo e de novo? Não redireciona mais — senão o portal fica em ping-pong com
+    // a tela de seleção de conta da Microsoft (ver TRAVA DE LOOP acima).
+    if (registrarFalhaDeToken() > MAX_FALHAS_SILENT) return null;
     if (!redirectInFlight()) {
       clearStaleInteraction();
       markRedirect();
@@ -336,6 +369,7 @@ export async function login(): Promise<boolean> {
   const app = instance();
   await app.initialize();
   clearStaleInteraction();
+  limparFalhasDeToken(); // gesto explícito do usuário: recomeça do zero
 
   if (emIframe()) {
     const res = await app.loginPopup({ scopes: LOGIN_SCOPES, prompt: "select_account" });

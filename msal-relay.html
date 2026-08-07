@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Entrando… — Portal TrustSis</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0b0f14;
+        color: #e6edf3;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+      }
+      p {
+        max-width: 32ch;
+        font-size: 14px;
+        line-height: 1.5;
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <main><p id="estado">Concluindo o login com a Microsoft…</p></main>
+    <script type="module" src="/src/msalRelay.ts"></script>
+  </body>
+</html>
