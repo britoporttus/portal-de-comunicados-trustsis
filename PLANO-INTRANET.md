@@ -4,6 +4,25 @@
 > (Claudio, Gustavo, João, Danyele) e no estado atual do portal.
 > Nada aqui foi implementado ainda — é o roteiro proposto.
 >
+> **Revisão 6 (2026-08-07) — ETAPAS QUE FALTAVAM DO ROTEIRO, CONCLUÍDAS:**
+> • **Relatórios (fecha a Fase 6 — "admin central + relatórios"):** nova aba
+>   **Administração › Relatórios** (`GET /api/relatorios`, `server/src/relatorios.ts`).
+>   Agrega o que JÁ está no store — nenhuma coleta nova, nenhuma chamada ao Graph: cobertura de
+>   leitura dos **comunicados obrigatórios** e das **políticas obrigatórias** (quantos
+>   confirmaram e o % sobre a base de pessoas do snapshot do diretório), engajamento do mês
+>   (pontos por tipo de ação, pessoas ativas nos últimos 14 dias, top 5), social
+>   (curtidas/comentários), tickets por status/prioridade, feedback do portal e o inventário do
+>   conteúdo publicado. Exporta CSV (`;`, para o Excel BR). Sem snapshot do diretório os
+>   percentuais viram "—" em vez de um número inventado.
+> • **OneDrive pessoal (a "Fase 5 — OneDrive nativo" do roteiro revisado):** nova página
+>   **Meus arquivos** (`/meus-arquivos`) com navegação **read-only** no OneDrive de quem está
+>   logado — pastas, tamanho, data e "Recentes"; o arquivo abre no OneDrive/Office.
+>   `graph.ts › listarMeuDrive()` + `GET /api/meudrive?pasta=<id>`. O drive é SEMPRE o da
+>   identidade que o backend resolveu (o cliente não escolhe usuário), e o recurso RBAC novo
+>   `onedrive` chega aos perfis já gravados pela migração `fase5-onedrive-pessoal`.
+>   **Permissão Graph nova: `Files.Read.All` (Application), com consentimento do admin** — sem
+>   ela a página mostra a instrução exata em vez de uma lista vazia.
+>
 > **Revisão 4 (2026-08-07) — FASE 2 IMPLEMENTADA:**
 > • **Bibliotecas de documentos:** o motor das Políticas foi generalizado
 >   (`graph.ts › listarDocsDoShare(shareUrl)`, com cache de 5 min por pasta). O admin cadastra
@@ -279,6 +298,7 @@ no SharePoint (read-only, msg 112).
 | Listar grupos p/ o admin escolher (Fase 0) | `Group.Read.All` | ✅ sim | ❌ novo |
 | Bibliotecas OneDrive/SharePoint (Fase 2) | `Sites.Read.All` | ✅ sim | ✅ (políticas) |
 | Criar eventos no calendário (Fase 3) | `Calendars.ReadWrite` | ✅ sim | ❌ novo |
+| OneDrive pessoal ("Meus arquivos") | `Files.Read.All` | ✅ sim | ❌ novo |
 | Ler agenda (já em uso) | `Calendars.Read` | — | ✅ |
 | API LinkedIn (Fase 5) | App LinkedIn + credenciais da página | — | ❌ externo |
 

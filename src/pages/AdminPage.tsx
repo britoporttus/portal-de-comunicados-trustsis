@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import {
   ShieldCheck, Activity, Stethoscope, Users, LayoutList, Wifi, WifiOff, PlugZap,
-  FolderOpen, LayoutGrid, Palette, History,
+  FolderOpen, LayoutGrid, Palette, History, BarChart3,
 } from "lucide-react";
 import { usePortal } from "@/context/PortalProvider";
 import { api } from "@/lib/api";
@@ -24,6 +24,7 @@ import { BibliotecasAdmin } from "@/components/admin/BibliotecasAdmin";
 import { AtalhosAdmin } from "@/components/admin/AtalhosAdmin";
 import { MarcaAdmin } from "@/components/admin/MarcaAdmin";
 import { AuditoriaAdmin } from "@/components/admin/AuditoriaAdmin";
+import { RelatoriosAdmin } from "@/components/admin/RelatoriosAdmin";
 import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { ScanStatus } from "@/components/portal/ScanStatus";
 
@@ -36,6 +37,7 @@ const ABAS = [
   { value: "integracao", label: "Integração", icon: PlugZap },
   { value: "atividade", label: "Atividade de pontos", icon: Activity },
   { value: "auditoria", label: "Auditoria", icon: History },
+  { value: "relatorios", label: "Relatórios", icon: BarChart3 },
   { value: "diagnostico", label: "Diagnóstico", icon: Stethoscope },
 ] as const;
 
@@ -113,6 +115,11 @@ export default function AdminPage() {
         {/* Fase 6: trilha de quem alterou perfis/permissões, integração, marca e bibliotecas. */}
         <TabsContent value="auditoria">
           <AuditoriaAdmin />
+        </TabsContent>
+
+        {/* Fase 6: cobertura da leitura obrigatória, engajamento e canais — visão de gestor. */}
+        <TabsContent value="relatorios">
+          <RelatoriosAdmin />
         </TabsContent>
 
         <TabsContent value="diagnostico">

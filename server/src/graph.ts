@@ -4,7 +4,10 @@
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { config, graphEnabled } from "./config.js";
 import { aoMudarIntegracao } from "./settings.js";
-import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante, PoliticaDoc, GrupoEntra } from "./types.js";
+import type {
+  Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante, PoliticaDoc, GrupoEntra,
+  ArquivoPessoal, MeuDrive,
+} from "./types.js";
 import { mockPeople, mockAgenda, mockOrg, mockVacations, mockPoliticas, mockGrupos } from "./mock.js";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
@@ -716,6 +719,86 @@ export async function previewDoDoc(shareUrl: string, itemId: string): Promise<st
   } catch (e) {
     console.warn("[graph] previewDoDoc falhou:", (e as Error).message);
     return null;
+  }
+}
+
+// ---------- OneDrive pessoal (acesso integrado às pastas do próprio colaborador) ----------
+// Diferente das BIBLIOTECAS (pastas institucionais compartilhadas, cadastradas pelo admin):
+// aqui o colaborador navega no PRÓPRIO OneDrive, read-only, e abre o arquivo no Office/Web.
+// A identidade sempre vem do backend (token/UPN resolvido) — o cliente nunca escolhe o drive.
+// Requer `Files.Read.All` (Application) com consentimento do admin no registro do app.
+
+function mapArquivoPessoal(f: any): ArquivoPessoal {
+  const pasta = Boolean(f?.folder);
+  return {
+    id: String(f?.id ?? ""),
+    nome: f?.name ?? (pasta ? "pasta" : "arquivo"),
+    pasta,
+    tipo: pasta ? undefined : tipoDoArquivo(f?.name ?? ""),
+    tamanho: typeof f?.size === "number" ? f.size : undefined,
+    atualizadoEm: f?.lastModifiedDateTime || undefined,
+    webUrl: f?.webUrl ?? "",
+    itens: pasta ? (f.folder?.childCount ?? undefined) : undefined,
+  };
+}
+
+/** Pasta primeiro, depois por nome — a ordem que se espera de um explorador de arquivos. */
+function ordenarArquivos(a: ArquivoPessoal, b: ArquivoPessoal): number {
+  if (a.pasta !== b.pasta) return a.pasta ? -1 : 1;
+  return a.nome.localeCompare(b.nome, "pt-BR");
+}
+
+/** Traduz a falha do Graph numa instrução ACIONÁVEL para a UI (em vez de "Graph 403 …"). */
+function erroDeDrive(e: Error): string {
+  const msg = e.message || "";
+  if (/\b403\b|accessDenied|Authorization_RequestDenied/i.test(msg)) {
+    return "O portal não tem permissão para ler o OneDrive. Conceda o consentimento de "
+      + "administrador para `Files.Read.All` (Application) no registro do app no Entra ID.";
+  }
+  if (/\b404\b|itemNotFound|ResourceNotFound/i.test(msg)) {
+    return "Este usuário não tem um OneDrive provisionado (ou a pasta não existe mais).";
+  }
+  return `Não foi possível listar o OneDrive: ${msg.slice(0, 200)}`;
+}
+
+/** Lista uma pasta do OneDrive do usuário (raiz quando `pastaId` vem vazio). */
+export async function listarMeuDrive(upn: string, pastaId?: string): Promise<MeuDrive> {
+  if (!graphEnabled) return { pasta: null, itens: [], demo: true };
+  const usuario = (upn || "").trim();
+  if (!usuario) return { pasta: null, itens: [], erro: "Usuário não identificado." };
+  const dono = encodeURIComponent(usuario);
+  try {
+    // `pastaId` vazio = raiz. O nome da pasta atual vem na mesma resposta do item.
+    const alvo = pastaId
+      ? `/users/${dono}/drive/items/${encodeURIComponent(pastaId)}`
+      : `/users/${dono}/drive/root`;
+    const item = await graphGet<any>(`${alvo}?$select=id,name,webUrl,folder`);
+    if (!item?.folder) return { pasta: null, itens: [], erro: "O item selecionado não é uma pasta." };
+
+    const filhos = await graphGetUrl<{ value: any[] }>(
+      `${GRAPH}${alvo}/children` +
+        `?$select=id,name,webUrl,size,lastModifiedDateTime,file,folder&$top=200`,
+    );
+    const itens = (filhos.value ?? []).map(mapArquivoPessoal).sort(ordenarArquivos);
+
+    // Na raiz, "Recentes" é o atalho mais útil (é o que o usuário abriu por último em
+    // qualquer pasta). Best-effort: se falhar, a listagem principal continua valendo.
+    let recentes: ArquivoPessoal[] | undefined;
+    if (!pastaId) {
+      try {
+        const r = await graphGet<{ value: any[] }>(`/users/${dono}/drive/recent?$top=8`);
+        recentes = (r.value ?? [])
+          .filter((f) => f?.file)
+          .map(mapArquivoPessoal)
+          .slice(0, 8);
+      } catch {
+        recentes = undefined;
+      }
+    }
+    return { pasta: { id: item.id, nome: pastaId ? (item.name ?? "pasta") : "Meus arquivos" }, itens, recentes };
+  } catch (e) {
+    console.warn("[graph] listarMeuDrive falhou:", (e as Error).message);
+    return { pasta: null, itens: [], erro: erroDeDrive(e as Error) };
   }
 }
 

@@ -1,7 +1,7 @@
 import {
   Home, Megaphone, CalendarDays, Cake, Plane, Network, LayoutGrid, Share2,
   Trophy, MessageSquareHeart, Ticket, ScrollText, MessageSquareWarning, ShieldCheck,
-  FolderOpen,
+  FolderOpen, HardDrive,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +24,9 @@ export const NAV: NavItem[] = [
   { to: "/politicas", label: "Políticas internas", icon: ScrollText },
   // Bibliotecas de documentos do SharePoint (Marketing, Templates, Institucional…).
   { to: "/documentos", label: "Documentos", icon: FolderOpen },
+  // OneDrive PESSOAL do colaborador (read-only) — não confundir com as bibliotecas acima,
+  // que são pastas compartilhadas da empresa.
+  { to: "/meus-arquivos", label: "Meus arquivos", icon: HardDrive },
   { to: "/social", label: "Redes sociais", icon: Share2 },
   { to: "/tickets", label: "Tickets", icon: Ticket },
   { to: "/ranking", label: "Ranking", icon: Trophy },

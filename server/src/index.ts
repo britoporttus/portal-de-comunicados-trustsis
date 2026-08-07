@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc, listarMeuDrive } from "./graph.js";
 import { mockPeople } from "./mock.js";
 import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeNoAcesso, podeVer,
@@ -20,6 +20,7 @@ import {
 } from "./pontos.js";
 import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
 import { auditar, listarAuditoria } from "./auditoria.js";
+import { montarRelatorios } from "./relatorios.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
   Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus,
@@ -154,6 +155,17 @@ app.post("/api/integracao/testar", requerPerm("perfis", "editar"), async (_req, 
 app.get("/api/auditoria", requerPerm("perfis", "ver"), (req, res) => {
   const limite = Number(req.query.limite) || 200;
   res.json(listarAuditoria(limite));
+});
+
+// ---------- relatórios da administração (Fase 6) ----------
+// Agregação do que já está no store: cobertura de leitura dos comunicados obrigatórios e das
+// políticas, engajamento (pontos/social), tickets e feedback do portal. Não bate no Graph.
+app.get("/api/relatorios", requerPerm("perfis", "ver"), (_req, res) => {
+  try {
+    res.json(montarRelatorios());
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 // ---------- pessoa atual / Graph ----------
@@ -618,6 +630,19 @@ app.delete("/api/bibliotecas/:id", requerPerm("bibliotecas", "excluir"), (req, r
   res.status(204).end();
 });
 
+// ---------- OneDrive pessoal: "Meus arquivos" ----------
+// Complementa as bibliotecas institucionais: aqui o colaborador navega no PRÓPRIO OneDrive
+// (read-only) e abre o arquivo no Office/Web. Só o próprio drive: o UPN é o que o backend
+// resolveu para a requisição (nunca um usuário escolhido pelo cliente) — pedir a pasta de
+// outra pessoa é impossível pela API. Exige `Files.Read.All` (Application) no Entra; sem o
+// consentimento, `erro` traz a instrução e a UI a exibe.
+app.get("/api/meudrive", requerPerm("onedrive", "ver"), async (req, res) => {
+  // Sem checagem de upn aqui de propósito: quem decide é listarMeuDrive, que sem Graph
+  // responde `demo: true` (preview) em vez de um erro de identidade que não ajuda ninguém.
+  const pastaId = typeof req.query.pasta === "string" ? req.query.pasta : undefined;
+  res.json(await listarMeuDrive(upnDaRequisicao(req), pastaId));
+});
+
 // ---------- Redes sociais (Fase 5: engajamento INTERNO — curtir/comentar no portal) ----------
 // O CRUD do post continua genérico, mas a LISTAGEM é própria: precisa dizer, para o usuário
 // da requisição, se ELE já curtiu (a comparação é por chave canônica, que o cliente não tem)
@@ -776,6 +801,9 @@ app.put("/api/politicas/:docId/obrigatoria", requerPerm("politicas", "editar"), 
       obrigatoria,
       definidoEm: new Date().toISOString(),
       definidoPor: quem || undefined,
+      // Guarda o nome do arquivo (o documento vive no SharePoint) para os RELATÓRIOS
+      // conseguirem rotular a política sem precisar bater no Graph.
+      nome: String(req.body?.nome || s.politicasConfig[req.params.docId]?.nome || "").slice(0, 160) || undefined,
     };
     return s.politicasConfig[req.params.docId];
   });

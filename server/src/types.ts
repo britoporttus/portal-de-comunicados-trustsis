@@ -286,6 +286,39 @@ export interface PoliticaConfig {
   obrigatoria?: boolean;
   definidoEm?: string;
   definidoPor?: string;
+  /** Nome do arquivo no momento em que a exigência foi definida — o documento mora no
+   *  SharePoint, então guardamos o rótulo para os RELATÓRIOS não mostrarem só o id. */
+  nome?: string;
+}
+
+// ---- OneDrive pessoal (acesso integrado às pastas do próprio colaborador) ----
+// Read-only, igual às bibliotecas: o portal LISTA e o arquivo abre no OneDrive/Office.
+// Cada colaborador vê SOMENTE o próprio drive — a identidade vem do token (nunca do cliente).
+export interface ArquivoPessoal {
+  id: string;
+  nome: string;
+  /** true = pasta navegável; false = arquivo (abre no `webUrl`). */
+  pasta: boolean;
+  /** Rótulo amigável do formato (PDF, Word, Excel…) — só para arquivos. */
+  tipo?: string;
+  tamanho?: number;
+  atualizadoEm?: string; // ISO
+  webUrl: string;
+  /** Quantidade de itens dentro da pasta (informativo). */
+  itens?: number;
+}
+
+/** Uma "página" da navegação no OneDrive do usuário. */
+export interface MeuDrive {
+  /** Pasta que está sendo listada (raiz quando não houver `pastaId` na consulta). */
+  pasta: { id: string; nome: string } | null;
+  itens: ArquivoPessoal[];
+  /** Arquivos recentes do usuário (só na raiz; best-effort). */
+  recentes?: ArquivoPessoal[];
+  /** Sem Graph (preview/demo): não há OneDrive para listar. */
+  demo?: boolean;
+  /** Mensagem pronta para a UI quando o Graph nega (falta consentimento etc.). */
+  erro?: string;
 }
 
 // ---- Auditoria (Fase 6): trilha de "quem mudou o quê e quando" na administração ----

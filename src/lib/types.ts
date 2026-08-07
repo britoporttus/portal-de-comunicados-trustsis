@@ -389,3 +389,109 @@ export interface Marca {
   atualizadoEm?: string;
   atualizadoPor?: string;
 }
+
+// ---- Relatórios da administração (Administração › Relatórios) ----
+// Espelha server/src/relatorios.ts. É AGREGAÇÃO do que já existe no store: cobertura de
+// leitura (comunicados obrigatórios e políticas), engajamento, tickets e feedback do portal.
+export interface SerieItem {
+  rotulo: string;
+  valor: number;
+}
+
+export interface CoberturaComunicado {
+  id: string;
+  titulo: string;
+  publicadoEm: string;
+  confirmacoes: number;
+  /** 0..1 — `null` quando não há base de usuários (sem snapshot do diretório). */
+  cobertura: number | null;
+}
+
+export interface CoberturaPolitica {
+  docId: string;
+  nome: string;
+  definidaEm?: string;
+  confirmacoes: number;
+  cobertura: number | null;
+}
+
+export interface Relatorios {
+  geradoEm: string;
+  base: { pessoas: number; fonte: "diretorio" | "nenhuma" };
+  comunicados: {
+    total: number;
+    obrigatorios: number;
+    ultimos30: number;
+    restritos: number;
+    coberturaMedia: number | null;
+    porCategoria: SerieItem[];
+    obrigatoriosDetalhe: CoberturaComunicado[];
+  };
+  politicas: {
+    obrigatorias: number;
+    confirmacoesTotais: number;
+    pessoasQueConfirmaram: number;
+    detalhe: CoberturaPolitica[];
+  };
+  social: {
+    publicacoes: number;
+    curtidas: number;
+    comentarios: number;
+    top: { id: string; autor: string; rede: string; curtidas: number; comentarios: number }[];
+  };
+  engajamento: {
+    mes: string;
+    participantes: number;
+    pontosNoMes: number;
+    porTipo: SerieItem[];
+    /** Últimos 14 dias: pessoas distintas que pontuaram por dia. */
+    porDia: SerieItem[];
+    top: { chave: string; nome: string; pontos: number }[];
+  };
+  tickets: {
+    total: number;
+    abertos: number;
+    porStatus: SerieItem[];
+    porPrioridade: SerieItem[];
+    maisAntigoDias: number | null;
+  };
+  reportes: {
+    total: number;
+    abertos: number;
+    porStatus: SerieItem[];
+    porTipo: SerieItem[];
+  };
+  conteudo: {
+    eventosFuturos: number;
+    bibliotecas: number;
+    atalhos: number;
+    perfis: number;
+    artefatosRestritos: number;
+  };
+}
+
+// ---- OneDrive pessoal ("Meus arquivos") ----
+// Read-only: o portal LISTA a pasta e o arquivo abre no OneDrive/Office. Cada colaborador
+// alcança somente o próprio drive (a identidade é resolvida no backend, pelo token).
+export interface ArquivoPessoal {
+  id: string;
+  nome: string;
+  /** true = pasta navegável; false = arquivo (abre no `webUrl`). */
+  pasta: boolean;
+  tipo?: string;
+  tamanho?: number;
+  atualizadoEm?: string;
+  webUrl: string;
+  itens?: number;
+}
+
+export interface MeuDrive {
+  pasta: { id: string; nome: string } | null;
+  itens: ArquivoPessoal[];
+  /** Arquivos recentes (só vem na raiz; best-effort). */
+  recentes?: ArquivoPessoal[];
+  /** Sem Graph configurado (preview/demo): não há OneDrive para listar. */
+  demo?: boolean;
+  /** Instrução pronta para a UI quando o Graph nega (ex.: falta consentimento). */
+  erro?: string;
+}
