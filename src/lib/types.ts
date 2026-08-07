@@ -16,6 +16,8 @@ export interface Comunicado {
   fixado?: boolean;
   publico?: PublicoAlvo;
   departamentos?: string[];
+  /** Perfis de acesso que enxergam o comunicado (vazio/ausente = todos). */
+  perfis?: string[];
   obrigatorio?: boolean;
   leituras?: string[];
   imagens?: string[]; // até 3 imagens anexadas (data URLs)
@@ -30,6 +32,8 @@ export interface Evento {
   fim?: string;
   local: string;
   imagem?: string; // foto opcional (data URL) — aparece no lugar da data
+  /** Perfis de acesso que enxergam o evento (vazio/ausente = todos). */
+  perfis?: string[];
 }
 
 export interface Aniversariante {
@@ -46,6 +50,7 @@ export interface LinkUtil {
   label: string;
   url: string;
   icon: string;
+  perfis?: string[];
 }
 
 export interface PublicacaoSocial {
@@ -56,6 +61,59 @@ export interface PublicacaoSocial {
   imagemUrl?: string;
   url: string;
   publicadoEm: string;
+  perfis?: string[];
+}
+
+// ---- RBAC do portal: Grupo do Entra → Perfil de acesso → Página/Artefato ----
+export type Acao = "ver" | "criar" | "editar" | "excluir";
+
+export interface Perfil {
+  id: string;
+  nome: string;
+  descricao?: string;
+  gruposEntra: string[];
+  gruposNomes?: string[];
+  paginas: string[];
+  permissoes: Record<string, Acao[]>;
+  admin?: boolean;
+  padrao?: boolean;
+  sistema?: boolean;
+  criadoEm?: string;
+  atualizadoEm?: string;
+}
+
+export interface GrupoEntra {
+  id: string;
+  nome: string;
+  descricao?: string;
+  email?: string;
+}
+
+/** Acesso EFETIVO do usuário logado (união dos perfis concedidos pelos grupos do Entra). */
+export interface Acesso {
+  isAdmin: boolean;
+  perfis: { id: string; nome: string }[];
+  paginas: string[];
+  permissoes: Record<string, Acao[]>;
+  grupos?: string[];
+}
+
+/** Catálogo do RBAC (páginas/recursos/ações) — alimenta a matriz da tela de perfis. */
+export interface RecursoDef {
+  chave: string;
+  label: string;
+  acoes: Acao[];
+}
+export interface PaginaDef {
+  rota: string;
+  label: string;
+  recurso?: string;
+  admin?: boolean;
+}
+export interface CatalogoAcesso {
+  paginas: PaginaDef[];
+  recursos: RecursoDef[];
+  acoes: Acao[];
 }
 
 export interface Pessoa {
@@ -73,6 +131,8 @@ export interface Pessoa {
 
 export interface Me extends Pessoa {
   isAdmin: boolean;
+  /** Acesso efetivo resolvido pelo backend (perfis, páginas e permissões). */
+  acesso?: Acesso;
 }
 
 export interface AgendaItem {
@@ -223,4 +283,32 @@ export interface PoliticaDoc {
   tamanho?: number; // bytes
   atualizadoEm?: string; // ISO
   webUrl: string; // abrir/baixar no SharePoint
+}
+
+// ---- Configuração de integração (SSO / Entra ID / Graph / políticas / ITSM) ----
+// Editável em Administração. O `.env` do servidor é só o BOOTSTRAP: o que o admin salva
+// no portal passa a ter precedência — `origem` diz, campo a campo, quem está mandando.
+export type OrigemCampo = "env" | "store" | "vazio";
+
+export interface IntegracaoConfig {
+  tenantId: string;
+  clientId: string;
+  /** O segredo NUNCA volta do backend: só a informação de que existe um salvo. */
+  temSecret: boolean;
+  adminGroupId: string;
+  demoUserUpn: string;
+  politicasShareUrl: string;
+  itsmBaseUrl: string;
+  itsmApiScope: string;
+  itsmTenantSubdomain: string;
+  authRequired: boolean;
+  // Estado derivado pelo backend — o que está de fato ligado agora.
+  graphAtivo: boolean;
+  ssoConfigurado: boolean;
+  barreiraAtiva: boolean;
+  itsmAtivo: boolean;
+  /** De onde vem o valor efetivo de cada campo (chave = nome do campo). */
+  origem: Record<string, OrigemCampo>;
+  atualizadoEm?: string; // ISO
+  atualizadoPor?: string; // UPN de quem salvou
 }

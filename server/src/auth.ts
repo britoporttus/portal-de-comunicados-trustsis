@@ -16,14 +16,34 @@ import type { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { config } from "./config.js";
 import { resolveDirectoryKey } from "./graph.js";
+import { aoMudarIntegracao, barreiraAtiva } from "./settings.js";
 
-export const authRequired = process.env.AUTH_REQUIRED === "true";
+// A barreira é DINÂMICA: ligada/desligada na tela de Administração (com o .env como
+// bootstrap). Era uma const lida no boot — agora é uma função, senão mudar a configuração
+// exigiria restart do processo.
+export function authRequired(): boolean {
+  return barreiraAtiva();
+}
 
-const tenant = config.entra.tenantId;
-const issuer = `https://login.microsoftonline.com/${tenant}/v2.0`;
-const jwks = authRequired && tenant
-  ? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys`))
-  : null;
+// JWKS é construído SOB DEMANDA e cacheado POR TENANT: trocar o tenant na tela precisa
+// invalidar o conjunto de chaves antigo (senão todo token do tenant novo seria rejeitado).
+let jwksCache: { tenant: string; jwks: ReturnType<typeof createRemoteJWKSet> } | null = null;
+
+function jwksDoTenant(tenant: string) {
+  if (jwksCache?.tenant !== tenant) {
+    jwksCache = {
+      tenant,
+      jwks: createRemoteJWKSet(
+        new URL(`https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys`),
+      ),
+    };
+  }
+  return jwksCache.jwks;
+}
+
+aoMudarIntegracao(() => {
+  jwksCache = null;
+});
 
 export interface TokenIdentity {
   oid?: string;
@@ -39,8 +59,9 @@ export interface TokenIdentity {
  *  Quem resolve o objeto certo é `resolveDirectoryKey` (graph.ts), que remapeia o domínio-alias
  *  para o member e, na falta, usa o oid (imutável, sempre resolvível). */
 async function identityFromToken(token: string): Promise<TokenIdentity> {
-  const { payload } = await jwtVerify(token, jwks!, {
-    issuer,
+  const tenant = config.entra.tenantId;
+  const { payload } = await jwtVerify(token, jwksDoTenant(tenant), {
+    issuer: `https://login.microsoftonline.com/${tenant}/v2.0`,
     audience: config.entra.clientId,
   });
   if (payload.tid !== tenant) throw new Error("tenant inválido");
@@ -53,7 +74,7 @@ async function identityFromToken(token: string): Promise<TokenIdentity> {
 
 /** Middleware de barreira. Aplicado às rotas /api (exceto /api/health). */
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (!authRequired || !jwks) return next(); // preview/demo: sem barreira
+  if (!authRequired()) return next(); // preview/demo/sem SSO configurado: sem barreira
 
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";

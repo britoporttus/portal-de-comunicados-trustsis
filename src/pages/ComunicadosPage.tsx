@@ -12,6 +12,7 @@ import { tempoRelativo, iniciais, CATEGORIA_META, PRIORIDADE_META } from "@/lib/
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
 import { Lightbox } from "@/components/portal/Lightbox";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,8 @@ interface FormState {
   fixado: boolean;
   publico: PublicoAlvo;
   departamentos: string[];
+  /** Perfis de acesso que enxergam o comunicado (vazio = todos) — Fase 1 do RBAC. */
+  perfis: string[];
   obrigatorio: boolean;
   imagens: string[];
 }
@@ -68,6 +71,7 @@ const FORM_INICIAL: FormState = {
   fixado: false,
   publico: "todos",
   departamentos: [],
+  perfis: [],
   obrigatorio: false,
   imagens: [],
 };
@@ -85,13 +89,19 @@ function visivelPara(c: Comunicado, tipoContrato?: PublicoAlvo, area?: string): 
 }
 
 export default function ComunicadosPage() {
-  const { me, isAdmin } = usePortal();
+  const { me, isAdmin, pode } = usePortal();
+  // Botões de gestão seguem o RBAC (recurso "comunicados"), não mais o isAdmin binário.
+  // O backend valida de novo em cada rota (server/src/perfis.ts › requerPerm).
+  const podeCriar = pode("comunicados", "criar");
+  const podeEditar = pode("comunicados", "editar");
+  const podeExcluir = pode("comunicados", "excluir");
+  const gerencia = podeCriar || podeEditar || podeExcluir;
   const { data, loading, reload } = useAsync(() => api.comunicados.list());
   // Departamentos existentes (Entra) para o seletor de segmentação — só admin cadastra.
-  const { data: deptData } = useAsync(() => (isAdmin ? api.departamentos() : Promise.resolve([])), [isAdmin]);
+  const { data: deptData } = useAsync(() => (gerencia ? api.departamentos() : Promise.resolve([])), [gerencia]);
   const deptOptions = deptData ?? [];
   // Diretório (só admin) para resolver quem confirmou a leitura: e-mail -> pessoa.
-  const { data: org } = useAsync(() => (isAdmin ? api.org() : Promise.resolve(null)), [isAdmin]);
+  const { data: org } = useAsync(() => (gerencia ? api.org() : Promise.resolve(null)), [gerencia]);
   const pessoaPorEmail = useMemo(() => {
     const m = new Map<string, { nome: string; cargo?: string; area?: string; fotoUrl?: string }>();
     for (const p of org?.diretorio ?? []) {
@@ -154,6 +164,7 @@ export default function ComunicadosPage() {
       fixado: c.fixado ?? false,
       publico: c.publico ?? "todos",
       departamentos: c.departamentos ?? [],
+      perfis: c.perfis ?? [],
       obrigatorio: c.obrigatorio ?? false,
       imagens: c.imagens ?? [],
     });
@@ -191,6 +202,7 @@ export default function ComunicadosPage() {
       fixado: form.fixado,
       publico: form.publico,
       departamentos: form.departamentos,
+      perfis: form.perfis,
       obrigatorio: form.obrigatorio,
       imagens: form.imagens,
     };
@@ -258,6 +270,7 @@ export default function ComunicadosPage() {
                   {d}
                 </span>
               ))}
+              <RestritoBadge perfis={c.perfis} />
               {c.fixado && <Pin className="size-3.5 text-primary" />}
             </div>
             <h3 className="font-semibold text-foreground">
@@ -327,12 +340,16 @@ export default function ComunicadosPage() {
             )}
           </div>
 
-          {isAdmin && (
+          {gerencia && (
             <div className="flex shrink-0 items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
-                <Pencil className="size-4" />
-              </Button>
-              <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
+              {podeEditar && (
+                <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
+                  <Pencil className="size-4" />
+                </Button>
+              )}
+              {podeExcluir && (
+                <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
+              )}
             </div>
           )}
         </div>
@@ -347,7 +364,7 @@ export default function ComunicadosPage() {
         title="Comunicados"
         description="Avisos e informativos internos"
         action={
-          isAdmin && (
+          podeCriar && (
             <Button onClick={abrirNovo}>
               <Plus className="size-4" /> Novo comunicado
             </Button>
@@ -401,6 +418,7 @@ export default function ComunicadosPage() {
                           {d}
                         </span>
                       ))}
+                      <RestritoBadge perfis={c.perfis} />
                       {c.fixado && <Pin className="size-3.5 text-primary" />}
                     </div>
                     <h3 className="font-semibold text-foreground">
@@ -470,12 +488,16 @@ export default function ComunicadosPage() {
                     )}
                   </div>
 
-                  {isAdmin && (
+                  {gerencia && (
                     <div className="flex shrink-0 items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                      <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
+                      {podeEditar && (
+                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
+                          <Pencil className="size-4" />
+                        </Button>
+                      )}
+                      {podeExcluir && (
+                        <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
+                      )}
                     </div>
                   )}
                 </div>
@@ -615,6 +637,12 @@ export default function ComunicadosPage() {
             )}
           </Field>
         </div>
+
+        {/* Segregação por perfil de acesso (RBAC do portal) — soma-se ao filtro acima. */}
+        <PerfisPicker
+          valor={form.perfis}
+          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
+        />
 
         <Field label="Autor" htmlFor="autor">
           <Input

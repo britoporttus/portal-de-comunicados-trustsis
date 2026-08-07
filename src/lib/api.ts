@@ -5,6 +5,7 @@ import type {
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
   Reporte, ReporteTipo, ReporteStatus, PoliticaDoc,
+  Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -163,4 +164,40 @@ export const api = {
   politicas: {
     list: () => req<PoliticaDoc[]>("/politicas"),
   },
+
+  // ---- RBAC: perfis de acesso do portal (Grupo do Entra → Perfil → Página/Artefato) ----
+  acesso: {
+    // Catálogo de páginas/recursos/ações: monta a matriz de permissões da tela de admin.
+    catalogo: () => req<CatalogoAcesso>("/acesso/catalogo"),
+  },
+  // Grupos do Entra disponíveis para associar a um perfil (o admin escolhe, não digita GUID).
+  gruposEntra: (upn?: string) => req<GrupoEntra[]>(comUpn("/grupos-entra", upn)),
+  perfis: {
+    list: (upn?: string) => req<Perfil[]>(comUpn("/perfis", upn)),
+    create: (b: Partial<Perfil>, upn?: string) =>
+      req<Perfil>(comUpn("/perfis", upn), { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<Perfil>, upn?: string) =>
+      req<Perfil>(comUpn(`/perfis/${id}`, upn), { method: "PUT", body: JSON.stringify(b) }),
+    remove: (id: string, upn?: string) =>
+      req<{ ok: boolean; artefatosAtualizados: number }>(comUpn(`/perfis/${id}`, upn), {
+        method: "DELETE",
+      }),
+  },
+  // ---- Configuração de integração (SSO/Entra, Graph, políticas, ITSM) editável no admin ----
+  // O `.env` do servidor é só bootstrap; o que for salvo aqui tem precedência.
+  integracao: {
+    get: (upn?: string) => req<IntegracaoConfig>(comUpn("/integracao", upn)),
+    // `clientSecret` vazio/ausente PRESERVA o segredo já salvo (o GET nunca o devolve).
+    save: (b: Partial<IntegracaoConfig> & { clientSecret?: string }, upn?: string) =>
+      req<IntegracaoConfig>(comUpn("/integracao", upn), { method: "PUT", body: JSON.stringify(b) }),
+    // Valida as credenciais SALVAS pegando um token app-only e lendo os grupos do tenant.
+    testar: (upn?: string) =>
+      req<{ ok: boolean; detalhe: string; grupos?: number }>(comUpn("/integracao/testar", upn), {
+        method: "POST",
+      }),
+  },
+
+  // Opções de perfil (id+nome) para o seletor de segregação dos artefatos (Fase 1).
+  // Aberto a qualquer autenticado — publicar conteúdo não exige ser admin do RBAC.
+  perfisOpcoes: () => req<{ id: string; nome: string }[]>("/perfis/opcoes"),
 };

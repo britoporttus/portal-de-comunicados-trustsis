@@ -1,6 +1,7 @@
 // Peças reutilizáveis para CRUD do admin: diálogo de formulário, campo rotulado e confirmação de exclusão.
 import { useState, type ReactNode, type ReactElement, type FormEvent } from "react";
 import { Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,6 +26,7 @@ export function Field({ label, htmlFor, children, hint }: {
 
 export function FormDialog({
   open, onOpenChange, title, description, children, onSubmit, submitLabel = "Salvar", submitting,
+  className,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -34,6 +36,8 @@ export function FormDialog({
   onSubmit: () => void | Promise<void>;
   submitLabel?: string;
   submitting?: boolean;
+  /** Largura do diálogo (ex.: "sm:max-w-3xl") para formulários mais densos. */
+  className?: string;
 }) {
   const handle = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,13 +45,20 @@ export function FormDialog({
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      {/* O diálogo NÃO rola como um bloco só: as linhas do grid são [cabeçalho, corpo] e o
+          corpo recebe minmax(0,1fr), então só ELE rola — e apenas quando o conteúdo não
+          couber. Antes o `overflow-y-auto` estava no container inteiro, o que levava título
+          e botões embora no scroll e deixava a barra sempre visível. */}
+      <DialogContent
+        className={cn("max-h-[90vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg", className)}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <form onSubmit={handle} className="space-y-4">
-          <div className="space-y-4">{children}</div>
+        <form onSubmit={handle} className="flex min-h-0 flex-col gap-4">
+          {/* `-mx-1 px-1` evita que o anel de foco dos campos seja cortado na área de scroll. */}
+          <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1">{children}</div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={submitting}>{submitting ? "Salvando…" : submitLabel}</Button>

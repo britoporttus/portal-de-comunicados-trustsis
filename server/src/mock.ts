@@ -1,6 +1,6 @@
 // Dados DEMO para pessoas/agenda/organograma/ausências — usados quando o Graph não
 // está configurado. Mantém o portal totalmente navegável sem Entra.
-import type { Pessoa, AgendaItem, Ausencia, OrgNode, PoliticaDoc } from "./types.js";
+import type { Pessoa, AgendaItem, Ausencia, OrgNode, PoliticaDoc, GrupoEntra } from "./types.js";
 
 export const mockPeople: Pessoa[] = [
   { id: "u_joao", nome: "João Ribeiro", cargo: "Analista de Sistemas", area: "Tecnologia", email: "joao.ribeiro@trustsis.com.br", telefone: "+55 11 99999-0001", managerId: "u_ana" },
@@ -41,6 +41,20 @@ export function mockVacations(): Ausencia[] {
   return [
     { pessoa: mockPeople[2], mensagem: "Em férias, retorno em breve. Para urgências, falar com a equipe.", ate: iso(6, 18) },
     { pessoa: mockPeople[3], mensagem: "Ausente por motivo de folga. Retorno amanhã.", ate: iso(1, 18) },
+  ];
+}
+
+// Grupos do Entra DEMO — alimentam o multi-select da tela de Perfis de acesso no preview,
+// onde o Graph está desligado. Em produção vêm de listGroups() (Group.Read.All).
+export function mockGrupos(): GrupoEntra[] {
+  return [
+    { id: "grp-admins", nome: "TI — Administradores do portal", descricao: "Gestão do portal" },
+    { id: "grp-ti", nome: "Tecnologia", descricao: "Time de tecnologia" },
+    { id: "grp-rh", nome: "Recursos Humanos", descricao: "Time de RH" },
+    { id: "grp-comercial", nome: "Comercial", descricao: "Time comercial" },
+    { id: "grp-marketing", nome: "Marketing", descricao: "Time de marketing" },
+    { id: "grp-diretoria", nome: "Diretoria", descricao: "Diretoria executiva" },
+    { id: "grp-todos", nome: "Todos os colaboradores", descricao: "Grupo geral da empresa" },
   ];
 }
 

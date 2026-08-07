@@ -1,40 +1,48 @@
-// Configuração central do backend. Lê env com fallback seguro (nunca dá FATAL por falta de env).
+// Configuração central do backend. Nunca dá FATAL por falta de env.
+//
+// A fonte da verdade da INTEGRAÇÃO (SSO/Entra, Graph, políticas, ITSM) é settings.ts —
+// que lê o que o admin salvou na tela de Administração e cai no .env como BOOTSTRAP.
+// Aqui expomos isso no formato que o resto do backend já consome (`config.entra.clientId`…).
+//
+// Os campos de `config` são GETTERS: cada leitura reflete a configuração ATUAL, então
+// salvar na tela passa a valer sem reiniciar o processo (os call sites leem dentro de
+// funções, no momento do uso).
+import { integracao, graphAtivo, itsmAtivo, aoMudarIntegracao } from "./settings.js";
+
 export const config = {
   apiPort: Number(process.env.API_PORT ?? 8000),
   entra: {
-    clientId: process.env.ENTRA_CLIENT_ID ?? "",
-    tenantId: process.env.ENTRA_TENANT_ID ?? "",
-    clientSecret: process.env.ENTRA_CLIENT_SECRET ?? "",
-    adminGroupId: process.env.ENTRA_ADMIN_GROUP_ID ?? "",
-    demoUserUpn: process.env.DEMO_USER_UPN ?? "",
+    get clientId() { return integracao().clientId; },
+    get tenantId() { return integracao().tenantId; },
+    get clientSecret() { return integracao().clientSecret; },
+    get adminGroupId() { return integracao().adminGroupId; },
+    get demoUserUpn() { return integracao().demoUserUpn; },
   },
   // Integração com a plataforma de chamados trustsis-itsm (server-to-server, app-only).
   // O portal é o BALCÃO: usuário abre/acompanha aqui; a gestão detalhada roda no ITSM.
-  // Só liga quando baseUrl + apiScope existem (e as credenciais Entra do app estão presentes).
   itsm: {
-    baseUrl: (process.env.ITSM_BASE_URL ?? "").replace(/\/+$/, ""), // sem barra final
-    apiScope: process.env.ITSM_API_SCOPE ?? "",                     // ex.: api://<client-id-itsm>/.default
-    tenantSubdomain: process.env.ITSM_TENANT_SUBDOMAIN ?? "trustsis",
+    get baseUrl() { return integracao().itsmBaseUrl; },
+    get apiScope() { return integracao().itsmApiScope; },
+    get tenantSubdomain() { return integracao().itsmTenantSubdomain; },
   },
   // Políticas internas: link de COMPARTILHAMENTO da pasta do SharePoint/OneDrive onde os
   // documentos são compartilhados com todos os colaboradores. O portal apenas LISTA e abre
   // esses arquivos (read-only) via Graph. Vazio => página cai em modo demo/vazia.
   politicas: {
-    shareUrl: process.env.POLITICAS_SHARE_URL ?? "",
+    get shareUrl() { return integracao().politicasShareUrl; },
   },
 };
 
-// Graph só é usado quando as 3 credenciais existem. Sem elas => MODO DEMO (dados de exemplo).
-export const graphEnabled = Boolean(
-  config.entra.clientId && config.entra.tenantId && config.entra.clientSecret,
-);
+// Flags de estado. São `let` (não `const`) DE PROPÓSITO: import de ESM é live binding, então
+// os ~20 lugares que fazem `if (graphEnabled)` passam a ver o valor novo assim que o admin
+// salva a configuração — sem precisar reescrever cada call site como chamada de função.
+export let graphEnabled = graphAtivo();
+export let itsmEnabled = itsmAtivo();
 
-// Integração ITSM ativa só com URL + escopo + credenciais do app (client-credentials do Entra).
-// Sem isso o portal opera 100% no store local (preview/demo/prod-sem-config nunca quebram).
-export const itsmEnabled = Boolean(
-  config.itsm.baseUrl &&
-    config.itsm.apiScope &&
-    config.entra.clientId &&
-    config.entra.tenantId &&
-    config.entra.clientSecret,
-);
+/** Recalcula as flags após uma mudança de configuração (registrado abaixo). */
+function recomputar(): void {
+  graphEnabled = graphAtivo();
+  itsmEnabled = itsmAtivo();
+}
+
+aoMudarIntegracao(recomputar);

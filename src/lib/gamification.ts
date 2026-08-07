@@ -20,6 +20,17 @@ export const TIPO_PONTO_ORDEM: TipoPonto[] = [
   "feedback_recebido", "feedback_enviado",
 ];
 
+/** Últimos N meses (YYYY-MM), do mais recente para o mais antigo. */
+export function ultimosMeses(qtd = 6): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = 0; i < qtd; i++) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    d.setMonth(d.getMonth() - 1);
+  }
+  return out;
+}
+
 /** Nome do mês (YYYY-MM) por extenso em pt-BR, ex.: "julho de 2026". */
 export function nomeDoMes(mes: string): string {
   const [ano, m] = mes.split("-").map(Number);

@@ -8,6 +8,7 @@ import { tempoRelativo } from "@/lib/format";
 import { RedeIcon } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,10 +30,15 @@ const FORM_INICIAL: Partial<PublicacaoSocial> = {
   texto: "",
   imagemUrl: "",
   url: "",
+  perfis: [],
 };
 
 export default function SocialPage() {
-  const { isAdmin, me } = usePortal();
+  // Gestão pelo RBAC (recurso "social"); o backend revalida em cada rota.
+  const { me, pode } = usePortal();
+  const podeCriar = pode("social", "criar");
+  const podeEditar = pode("social", "editar");
+  const podeExcluir = pode("social", "excluir");
   const { data, loading, reload } = useAsync(() => api.social.list());
 
   const [open, setOpen] = useState(false);
@@ -54,6 +60,7 @@ export default function SocialPage() {
       texto: p.texto,
       imagemUrl: p.imagemUrl ?? "",
       url: p.url,
+      perfis: p.perfis ?? [],
     });
     setOpen(true);
   };
@@ -88,7 +95,7 @@ export default function SocialPage() {
         title="Redes sociais"
         description="Últimas publicações da TrustSis"
         action={
-          isAdmin && (
+          podeCriar && (
             <Button onClick={abrirNovo}>
               <Plus className="size-4" /> Nova publicação
             </Button>
@@ -111,20 +118,25 @@ export default function SocialPage() {
                 <RedeIcon rede={p.rede} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">{p.autor}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {tempoRelativo(p.publicadoEm)}
+                    <RestritoBadge perfis={p.perfis} />
                   </p>
                 </div>
 
-                {isAdmin && (
+                {(podeEditar || podeExcluir) && (
                   <div className="ml-auto flex shrink-0 items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)}>
-                      <Pencil className="size-4" />
-                    </Button>
-                    <ConfirmDelete
-                      onConfirm={() => excluir(p.id)}
-                      label="Excluir publicação"
-                    />
+                    {podeEditar && (
+                      <Button variant="ghost" size="icon" onClick={() => abrirEdicao(p)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                    )}
+                    {podeExcluir && (
+                      <ConfirmDelete
+                        onConfirm={() => excluir(p.id)}
+                        label="Excluir publicação"
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -223,6 +235,12 @@ export default function SocialPage() {
             placeholder="https://…"
           />
         </Field>
+
+        {/* Publicação restrita a perfis de acesso (vazio = visível a todos). */}
+        <PerfisPicker
+          valor={form.perfis ?? []}
+          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
+        />
       </FormDialog>
     </div>
   );

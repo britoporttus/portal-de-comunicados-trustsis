@@ -99,4 +99,35 @@
   html {
     @apply font-sans;
   }
+
+  /* SCROLLBARS TEMATIZADAS.
+     Sem isto o navegador desenha a barra NATIVA (clara), que no tema escuro aparecia como
+     uma faixa BRANCA — em modais, listas e na área de conteúdo. Como a cor sai dos tokens,
+     acompanha claro/escuro e a troca de tema de cor sem manutenção.
+     `scrollbar-*` cobre Firefox e Chrome 121+; as regras `::-webkit-` cobrem o resto. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+    /* borda transparente = respiro em volta do polegar, sem pintar a trilha */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }

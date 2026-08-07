@@ -4,6 +4,19 @@
 > (Claudio, Gustavo, João, Danyele) e no estado atual do portal.
 > Nada aqui foi implementado ainda — é o roteiro proposto.
 >
+> **Revisão 3 (2026-08-07) — STATUS DE IMPLEMENTAÇÃO:**
+> • **Fase 0 IMPLEMENTADA:** perfis de acesso com CRUD (`/admin`, aba "Perfis de acesso"),
+>   grupos do Entra via `memberOf`/`listGroups`, middleware `requerPerm()` no backend e
+>   `pode(recurso, acao)` no front (o `isAdmin` binário saiu do caminho).
+> • **Fase 1 IMPLEMENTADA:** `perfis[]` em comunicados/eventos/links/social, filtro no backend,
+>   multi-select nos formulários e selo "Restrito" nas listagens. Coexiste com
+>   `departamentos[]`/`publico` (filtro em E) — nada precisou migrar.
+> • **NOVO (fora do plano original, pedido em reunião):** a configuração de **SSO/Entra ID,
+>   Graph, políticas e ITSM saiu do `.env`** e virou a aba **Administração › Integração**.
+>   O `.env` continua apenas como *bootstrap* (valor inicial); o que é salvo na tela tem
+>   precedência. Isso antecipa parte da Fase 6 (admin central).
+> • **Pendente de decisão sua:** as 6 perguntas da §7 continuam abertas.
+>
 > **Revisão 2 (2026-08-07):**
 > • Incorporado o requisito de **Perfis de acesso (CRUD no portal)** — antes o plano só previa
 >   grupos do Entra "crus"; agora há uma camada RBAC própria do portal (§3 e Fase 0).
@@ -289,4 +302,5 @@ página/ação e segregação de comunicados/eventos/links por perfil. É o pedi
 
 ---
 
-*Aguardo sua validação/ajustes neste plano para começar a implementar a Fase 0.*
+*Fases 0 e 1 implementadas (ver Revisão 3 no topo). Aguardo sua validação das perguntas da §7
+para seguir para a Fase 2 (links, bibliotecas e atalhos para dashboards externos).*

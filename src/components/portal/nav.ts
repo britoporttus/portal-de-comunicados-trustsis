@@ -1,6 +1,6 @@
 import {
   Home, Megaphone, CalendarDays, Cake, Plane, Network, LayoutGrid, Share2,
-  Trophy, MessageSquareHeart, Ticket, ScrollText, MessageSquareWarning,
+  Trophy, MessageSquareHeart, Ticket, ScrollText, MessageSquareWarning, ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -8,6 +8,8 @@ export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Item de administração: só aparece para quem tem perfil admin. */
+  admin?: boolean;
 }
 
 export const NAV: NavItem[] = [
@@ -24,4 +26,7 @@ export const NAV: NavItem[] = [
   { to: "/ranking", label: "Ranking", icon: Trophy },
   { to: "/feedback", label: "Feedback", icon: MessageSquareHeart },
   { to: "/reportar", label: "Feedback do portal", icon: MessageSquareWarning },
+  // Administração: página ÚNICA com tudo de admin (perfis de acesso, auditoria de pontos,
+  // diagnóstico). Só aparece para quem tem perfil admin.
+  { to: "/admin", label: "Administração", icon: ShieldCheck, admin: true },
 ];

@@ -18,6 +18,8 @@ export interface Comunicado {
   // Segmentação: por tipo de contrato e/ou por departamentos/grupos.
   publico?: PublicoAlvo; // default "todos"
   departamentos?: string[]; // vazio/ausente = todos os departamentos
+  /** Perfis de acesso do portal que enxergam o item (vazio/ausente = todos). Ver Perfil. */
+  perfis?: string[];
   obrigatorio?: boolean; // exige confirmação de leitura
   leituras?: string[]; // e-mails/UPN de quem confirmou a leitura
   imagens?: string[]; // até 3 imagens anexadas (data URLs comprimidas)
@@ -32,6 +34,8 @@ export interface Evento {
   fim?: string; // ISO
   local: string;
   imagem?: string; // foto opcional (data URL comprimida) — aparece no lugar da data
+  /** Perfis de acesso que enxergam o evento (vazio/ausente = todos). */
+  perfis?: string[];
 }
 
 export interface Aniversariante {
@@ -48,6 +52,8 @@ export interface LinkUtil {
   label: string;
   url: string;
   icon: string; // nome do ícone lucide ou chave conhecida
+  /** Perfis de acesso que enxergam o atalho (vazio/ausente = todos). */
+  perfis?: string[];
 }
 
 export interface PublicacaoSocial {
@@ -58,6 +64,56 @@ export interface PublicacaoSocial {
   imagemUrl?: string;
   url: string;
   publicadoEm: string;
+  /** Perfis de acesso que enxergam a publicação (vazio/ausente = todos). */
+  perfis?: string[];
+}
+
+// ---- RBAC do portal: Grupo do Entra → Perfil de acesso → Página/Artefato ----
+// A camada do MEIO (Perfil) é o que o admin manipula por CRUD na UI, sem tocar em código
+// nem em env. O grupo do Entra continua sendo a fonte da verdade de QUEM é a pessoa.
+
+/** Ações possíveis sobre um recurso do portal. */
+export type Acao = "ver" | "criar" | "editar" | "excluir";
+
+/** Perfil de acesso do portal (entidade gerida por CRUD na UI de admin). */
+export interface Perfil {
+  id: string;
+  nome: string;
+  descricao?: string;
+  /** ids dos grupos do Entra que CONCEDEM este perfil (1..N). */
+  gruposEntra: string[];
+  /** nomes dos grupos capturados no cadastro (exibição sem bater no Graph). */
+  gruposNomes?: string[];
+  /** rotas do menu liberadas (ex.: "/", "/comunicados"). */
+  paginas: string[];
+  /** por recurso (chave do catálogo), quais ações são permitidas. */
+  permissoes: Record<string, Acao[]>;
+  /** super-perfil: enxerga tudo, inclusive a administração de perfis. */
+  admin?: boolean;
+  /** perfil-fallback de quem não casa com nenhum grupo. */
+  padrao?: boolean;
+  /** perfis de sistema (Administrador/Colaborador) não podem ser excluídos. */
+  sistema?: boolean;
+  criadoEm?: string;
+  atualizadoEm?: string;
+}
+
+/** Grupo do Entra ID exibido para o admin escolher (vem do Graph, não é persistido). */
+export interface GrupoEntra {
+  id: string;
+  nome: string;
+  descricao?: string;
+  email?: string;
+}
+
+/** Acesso EFETIVO do usuário atual (união dos perfis que os grupos dele concedem). */
+export interface Acesso {
+  isAdmin: boolean;
+  perfis: { id: string; nome: string }[];
+  paginas: string[];
+  permissoes: Record<string, Acao[]>;
+  /** ids dos grupos do Entra do usuário (vazio em modo demo) — ajuda no diagnóstico. */
+  grupos?: string[];
 }
 
 // ---- Gamificação (ranking + feedback) ----
@@ -180,6 +236,30 @@ export interface Store {
   tickets?: Ticket[];
   // Feedback do portal (bugs/melhorias). Políticas NÃO ficam no store: vêm do SharePoint.
   reportes?: Reporte[];
+  // RBAC: perfis de acesso do portal (opcional → store antigo de produção não reseta;
+  // na primeira leitura os perfis de sistema são criados por garantirPerfis()).
+  perfis?: Perfil[];
+  // Configuração de integração (SSO/Entra, Graph, políticas, ITSM) editada em Administração.
+  // Opcional: sem ela o portal cai no .env (bootstrap) — store antigo não reseta.
+  integracao?: Integracao;
+}
+
+/** Configuração de integração persistida (ver server/src/settings.ts).
+ *  `clientSecret` NUNCA é devolvido pela API — só `temSecret: boolean`. */
+export interface Integracao {
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
+  adminGroupId: string;
+  demoUserUpn: string;
+  politicasShareUrl: string;
+  itsmBaseUrl: string;
+  itsmApiScope: string;
+  itsmTenantSubdomain: string;
+  /** Barreira de SSO no backend (valida o Bearer em /api). */
+  authRequired: boolean;
+  atualizadoEm?: string;
+  atualizadoPor?: string;
 }
 
 // ---- Graph / pessoas ----

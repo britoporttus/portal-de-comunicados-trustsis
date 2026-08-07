@@ -14,11 +14,77 @@ import {
   type AccountInfo,
 } from "@azure/msal-browser";
 
-const clientId = (import.meta.env.VITE_ENTRA_CLIENT_ID as string | undefined) ?? "";
-const tenantId = (import.meta.env.VITE_ENTRA_TENANT_ID as string | undefined) ?? "";
+// CONFIGURAÇÃO EM RUNTIME (não mais embutida no build).
+//
+// Antes o clientId/tenantId vinham de VITE_ENTRA_* — ou seja, ficavam CONGELADOS no bundle
+// no momento do `npm run build`, e trocar o registro de app exigia rebuild + redeploy.
+// Agora o front PERGUNTA ao backend (`GET /api/config/auth`, rota pública que existe
+// justamente para ser lida antes de haver token), e o backend responde a configuração que
+// o admin salvou na tela de Administração. As envs VITE_* seguem apenas como FALLBACK,
+// para um bundle antigo continuar funcionando se a rota não existir no servidor.
+interface ConfigAuth {
+  authEnabled: boolean;
+  clientId: string;
+  tenantId: string;
+  /** Barreira ligada no backend: sem login o portal não deve cair em modo demo. */
+  authRequired: boolean;
+}
 
-/** Auth só liga quando o registro SPA está configurado (produção). */
-export const authEnabled = Boolean(clientId && tenantId);
+const ENV_FALLBACK: ConfigAuth = {
+  clientId: (import.meta.env.VITE_ENTRA_CLIENT_ID as string | undefined) ?? "",
+  tenantId: (import.meta.env.VITE_ENTRA_TENANT_ID as string | undefined) ?? "",
+  get authEnabled() {
+    return Boolean(this.clientId && this.tenantId);
+  },
+  authRequired: false,
+};
+
+let cfg: ConfigAuth | null = null;
+let cfgPromise: Promise<ConfigAuth> | null = null;
+
+/** Carrega (uma vez) a configuração de SSO do backend. Chamado por initAuth antes de
+ *  qualquer uso da MSAL — e o main.tsx aguarda initAuth ANTES de renderizar, então a UI
+ *  nunca lê uma configuração pela metade. */
+export function carregarConfigAuth(): Promise<ConfigAuth> {
+  if (!cfgPromise) {
+    cfgPromise = (async () => {
+      try {
+        const r = await fetch("/api/config/auth");
+        if (!r.ok) throw new Error(String(r.status));
+        const c = (await r.json()) as ConfigAuth;
+        cfg = {
+          authEnabled: Boolean(c.authEnabled && c.clientId && c.tenantId),
+          clientId: c.clientId ?? "",
+          tenantId: c.tenantId ?? "",
+          authRequired: Boolean(c.authRequired),
+        };
+      } catch {
+        // Backend antigo/indisponível: usa o que veio no build (compatibilidade).
+        cfg = { ...ENV_FALLBACK, authEnabled: ENV_FALLBACK.authEnabled };
+      }
+      return cfg;
+    })();
+  }
+  return cfgPromise;
+}
+
+/** Auth está ligado? (válido após carregarConfigAuth — garantido pelo main.tsx). */
+export function authAtivo(): boolean {
+  return Boolean(cfg?.authEnabled);
+}
+
+/** A barreira do backend exige login? (usado para não exibir dados de demo em produção.) */
+export function authObrigatorio(): boolean {
+  return Boolean(cfg?.authRequired);
+}
+
+function clientIdAtual(): string {
+  return cfg?.clientId ?? "";
+}
+
+function tenantAtual(): string {
+  return cfg?.tenantId ?? "";
+}
 
 // Escopos delegados que o registro já consente (login SPA). O idToken resultante
 // (aud = clientId, iss = tenant) é o que enviamos ao backend como Bearer.
@@ -35,16 +101,18 @@ function isSpecificTenant(t: string): boolean {
 /** Contas do cache que pertencem ao tenant configurado (fallback: todas). */
 function accountsForTenant(app: PublicClientApplication): AccountInfo[] {
   const all = app.getAllAccounts();
-  if (!isSpecificTenant(tenantId)) return all;
-  const doTenant = all.filter((a) => a.tenantId?.toLowerCase() === tenantId.toLowerCase());
+  const tenant = tenantAtual();
+  if (!isSpecificTenant(tenant)) return all;
+  const doTenant = all.filter((a) => a.tenantId?.toLowerCase() === tenant.toLowerCase());
   return doTenant.length ? doTenant : all;
 }
 
 /** Uma conta é aceitável se o tenant não é específico OU ela é do tenant certo. */
 function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
   if (!a) return false;
-  if (!isSpecificTenant(tenantId)) return true;
-  return a.tenantId?.toLowerCase() === tenantId.toLowerCase();
+  const tenant = tenantAtual();
+  if (!isSpecificTenant(tenant)) return true;
+  return a.tenantId?.toLowerCase() === tenant.toLowerCase();
 }
 
 let pca: PublicClientApplication | null = null;
@@ -54,8 +122,8 @@ function instance(): PublicClientApplication {
   if (!pca) {
     pca = new PublicClientApplication({
       auth: {
-        clientId,
-        authority: `https://login.microsoftonline.com/${tenantId}`,
+        clientId: clientIdAtual(),
+        authority: `https://login.microsoftonline.com/${tenantAtual()}`,
         redirectUri: window.location.origin,
         postLogoutRedirectUri: window.location.origin,
       },
@@ -144,7 +212,9 @@ async function robustLoginRedirect(app: PublicClientApplication): Promise<void> 
  *  navegar. Resultado: ficava preso em "Modo demo". O redirect direto é o que o usuário
  *  quer (cair no SSO) e é o fluxo robusto. */
 export async function initAuth(): Promise<void> {
-  if (!authEnabled) return;
+  // Descobre COMO autenticar antes de qualquer coisa (rota pública do backend).
+  await carregarConfigAuth();
+  if (!authAtivo()) return;
   if (!initPromise) {
     initPromise = (async () => {
       const app = instance();
@@ -193,8 +263,8 @@ function activeAccount(): AccountInfo | null {
  *  Retorna null quando auth está desligado. Dispara redirect (uma vez) só se a sessão
  *  do Entra não puder ser reaproveitada silenciosamente. */
 export async function getAuthToken(): Promise<string | null> {
-  if (!authEnabled) return null;
   await initAuth();
+  if (!authAtivo()) return null;
   const app = instance();
   const account = activeAccount();
   // Sem conta aqui = initAuth já disparou o redirect (ou o guardou). Não bloqueia a UI.
@@ -230,7 +300,8 @@ export async function getAuthToken(): Promise<string | null> {
  *  antes de navegar, então é o caminho à prova de estado-local-corrompido (o cenário do
  *  Edge que restaura abas). No-op no preview (auth desligado). */
 export async function login(): Promise<void> {
-  if (!authEnabled) return;
+  await carregarConfigAuth();
+  if (!authAtivo()) return;
   const app = instance();
   await app.initialize();
   clearStaleInteraction();
@@ -240,13 +311,14 @@ export async function login(): Promise<void> {
 
 /** Conta ativa (para exibir nome/UPN, se necessário). */
 export function getAccount(): AccountInfo | null {
-  if (!authEnabled) return null;
+  if (!authAtivo()) return null;
   return activeAccount();
 }
 
 /** Logout explícito (opcional — a barreira normalmente é transparente). */
 export async function signOut(): Promise<void> {
-  if (!authEnabled) return;
+  await initAuth();
+  if (!authAtivo()) return;
   await initAuth();
   await instance().logoutRedirect();
 }

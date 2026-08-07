@@ -96,13 +96,14 @@ const MESES = [
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function AniversariantesPage() {
-  const { isAdmin } = usePortal();
+  // Gestão pelo RBAC (recurso "aniversariantes"); o backend revalida.
+  const { pode } = usePortal();
   // Aniversários do Entra (campo birthday) são mesclados com os cadastrados manualmente,
   // então o admin sempre pode adicionar quem faltar — inclusive em modo Graph.
-  const editavel = isAdmin;
+  const editavel = pode("aniversariantes", "editar") || pode("aniversariantes", "criar");
   const { data, loading, reload } = useAsync(() => api.aniversariantes.list(), []);
   // Diretório do Entra para o seletor de nome (só admin, que é quem cadastra).
-  const { data: org } = useAsync(() => (isAdmin ? api.org() : Promise.resolve(null)), [isAdmin]);
+  const { data: org } = useAsync(() => (editavel ? api.org() : Promise.resolve(null)), [editavel]);
   const pessoas = useMemo(() => org?.diretorio ?? [], [org]);
 
   const [mesFiltro, setMesFiltro] = useState<number>(new Date().getMonth() + 1);

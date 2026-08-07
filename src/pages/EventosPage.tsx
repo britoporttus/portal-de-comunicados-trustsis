@@ -14,6 +14,7 @@ import { comprimirImagem } from "@/lib/image";
 import { diaSemana, faixaHorario } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,8 @@ interface FormState {
   inicio: string;
   fim: string;
   imagem: string;
+  /** Perfis de acesso que enxergam o evento (vazio = todos) — Fase 1 do RBAC. */
+  perfis: string[];
 }
 
 const VAZIO: FormState = {
@@ -62,10 +65,15 @@ const VAZIO: FormState = {
   inicio: "",
   fim: "",
   imagem: "",
+  perfis: [],
 };
 
 export default function EventosPage() {
-  const { isAdmin } = usePortal();
+  // Gestão pelo RBAC (recurso "eventos"), não pelo isAdmin binário — o backend revalida.
+  const { pode } = usePortal();
+  const podeCriar = pode("eventos", "criar");
+  const podeEditar = pode("eventos", "editar");
+  const podeExcluir = pode("eventos", "excluir");
   const { data, loading, reload } = useAsync<Evento[]>(() => api.eventos.list());
 
   const [open, setOpen] = useState(false);
@@ -103,6 +111,7 @@ export default function EventosPage() {
       inicio: toLocalInput(e.inicio),
       fim: e.fim ? toLocalInput(e.fim) : "",
       imagem: e.imagem ?? "",
+      perfis: e.perfis ?? [],
     });
     setOpen(true);
   }
@@ -119,6 +128,7 @@ export default function EventosPage() {
         inicio: new Date(form.inicio).toISOString(),
         fim: form.fim ? new Date(form.fim).toISOString() : undefined,
         imagem: form.imagem || undefined,
+        perfis: form.perfis,
       };
       if (editId) await api.eventos.update(editId, payload);
       else await api.eventos.create(payload);
@@ -143,7 +153,7 @@ export default function EventosPage() {
         title="Eventos"
         description="Agenda de eventos e confraternizações da empresa"
         action={
-          isAdmin && (
+          podeCriar && (
             <Button onClick={abrirNovo}>
               <Plus className="size-4" />
               Novo evento
@@ -189,6 +199,7 @@ export default function EventosPage() {
                         <Icon className="size-3" />
                         {meta.label}
                       </Badge>
+                      <RestritoBadge perfis={e.perfis} className="ml-1.5" />
                       <h3 className="font-semibold text-foreground">
                         <Link to={`/eventos/${e.id}`} className="hover:text-primary hover:underline">
                           {e.titulo}
@@ -199,18 +210,22 @@ export default function EventosPage() {
                       )}
                     </div>
 
-                    {isAdmin && (
+                    {(podeEditar || podeExcluir) && (
                       <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-foreground"
-                          onClick={() => abrirEdicao(e)}
-                          aria-label="Editar evento"
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <ConfirmDelete label="Excluir evento" onConfirm={() => excluir(e.id)} />
+                        {podeEditar && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => abrirEdicao(e)}
+                            aria-label="Editar evento"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                        )}
+                        {podeExcluir && (
+                          <ConfirmDelete label="Excluir evento" onConfirm={() => excluir(e.id)} />
+                        )}
                       </div>
                     )}
                   </div>
@@ -344,6 +359,12 @@ export default function EventosPage() {
             />
           </Field>
         </div>
+
+        {/* Evento restrito a perfis de acesso (vazio = visível a todos). */}
+        <PerfisPicker
+          valor={form.perfis}
+          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
+        />
       </FormDialog>
     </div>
   );

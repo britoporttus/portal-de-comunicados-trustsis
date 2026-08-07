@@ -5,9 +5,13 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn, listGroups } from "./graph.js";
+import {
+  acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeVer, requerPerm,
+} from "./perfis.js";
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired } from "./auth.js";
+import { integracaoMascarada, salvarIntegracao } from "./settings.js";
 import {
   registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave, atividadeDiaria,
   canonizar, reverterPontosFeedback,
@@ -26,35 +30,171 @@ app.use(express.json({ limit: "16mb" }));
 // ---------- meta / saúde ----------
 // Health fica ANTES da barreira (monitoração externa não precisa de token).
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, graph: isGraphOn, mode: isGraphOn ? "graph" : "demo", auth: authRequired });
+  res.json({ ok: true, graph: isGraphOn, mode: isGraphOn ? "graph" : "demo", auth: authRequired() });
 });
 
-// Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando AUTH_REQUIRED off).
+// ---------- configuração de SSO para o FRONTEND (público, ANTES da barreira) ----------
+// O front não pode mais depender de VITE_ENTRA_* embutido no build: ele PERGUNTA ao backend
+// como se autenticar. Precisa ficar ANTES do requireAuth (é justamente o que o cliente lê
+// para conseguir obter um token) e expõe somente dados PÚBLICOS do registro de app —
+// clientId e tenantId de um SPA são públicos por natureza; o clientSecret nunca sai daqui.
+app.get("/api/config/auth", (_req, res) => {
+  const c = integracaoMascarada();
+  res.json({
+    authEnabled: c.ssoConfigurado,
+    clientId: c.clientId,
+    tenantId: c.tenantId,
+    // Com a barreira ativa, o front NÃO pode cair em modo demo: exige login.
+    authRequired: c.barreiraAtiva,
+  });
+});
+
+// Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando desligada).
 app.use("/api", requireAuth);
 
+// ---------- integração (SSO / Entra ID / Graph / ITSM) editável em Administração ----------
+// Tudo que antes vivia só no .env agora é gerido aqui. O .env continua sendo o BOOTSTRAP
+// (ver server/src/settings.ts) — o que for salvo nesta tela passa a ter precedência.
+app.get("/api/integracao", requerPerm("perfis", "ver"), (_req, res) => {
+  res.json(integracaoMascarada());
+});
+
+app.put("/api/integracao", requerPerm("perfis", "editar"), (req, res) => {
+  const quem = upnDaRequisicao(req);
+  try {
+    res.json(salvarIntegracao(req.body ?? {}, quem || undefined));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+// Testa as credenciais SALVAS: pega um token app-only e faz uma leitura mínima no Graph.
+// É o que diz ao admin se a configuração realmente funciona (em vez de descobrir na falha).
+app.post("/api/integracao/testar", requerPerm("perfis", "editar"), async (_req, res) => {
+  if (!graphEnabled) {
+    return res.json({
+      ok: false,
+      detalhe: "Graph desligado: informe tenantId, clientId e clientSecret.",
+    });
+  }
+  try {
+    const grupos = await listGroups();
+    res.json({
+      ok: true,
+      detalhe: `Conexão OK — ${grupos.length} grupo(s) visíveis no tenant.`,
+      grupos: grupos.length,
+    });
+  } catch (e) {
+    res.json({ ok: false, detalhe: (e as Error).message });
+  }
+});
+
 // ---------- pessoa atual / Graph ----------
+// Devolve o perfil da pessoa MAIS o acesso EFETIVO (perfis do portal, páginas visíveis e
+// permissões por recurso×ação) — é o que o front usa para montar o menu e esconder ações.
+// `isAdmin` continua no payload (compatibilidade), agora derivado do RBAC.
 app.get("/api/me", async (req, res) => {
   const upn = (req.query.upn as string) || undefined;
   try {
-    res.json(await getProfile(upn));
+    const [pessoa, acesso] = await Promise.all([getProfile(upn), acessoDaReq(req)]);
+    res.json({ ...pessoa, isAdmin: acesso.isAdmin, acesso });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
+
+// ---------- RBAC: perfis de acesso do portal ----------
+// Catálogo (páginas, recursos e ações) que a tela de admin usa para montar a matriz.
+app.get("/api/acesso/catalogo", (_req, res) => res.json(catalogo()));
+
+// Grupos do Entra para o admin ESCOLHER (não digitar GUID). Requer Group.Read.All;
+// sem Graph devolve grupos demo para a tela ficar navegável no preview.
+app.get("/api/grupos-entra", requerPerm("perfis", "ver"), async (_req, res) => {
+  res.json(await listGroups());
+});
+
+app.get("/api/perfis", requerPerm("perfis", "ver"), (_req, res) => {
+  res.json(listarPerfis());
+});
+
+// OPÇÕES de perfil (só id+nome) para o seletor "restringir a perfis" dos formulários de
+// artefato (Fase 1). Quem publica um comunicado/evento não é necessariamente admin do RBAC,
+// então NÃO exige a permissão de "perfis" — e o payload não expõe permissões nem grupos.
+app.get("/api/perfis/opcoes", (_req, res) => {
+  res.json(listarPerfis().map((p) => ({ id: p.id, nome: p.nome })));
+});
+
+app.post("/api/perfis", requerPerm("perfis", "criar"), (req, res) => {
+  const novo = normalizarPerfil(req.body);
+  const item = mutate((s) => {
+    if (!s.perfis) s.perfis = [];
+    // Só um perfil pode ser o PADRÃO (fallback de quem não casa com nenhum grupo).
+    if (novo.padrao) for (const p of s.perfis) p.padrao = false;
+    s.perfis.push(novo);
+    return novo;
+  });
+  res.status(201).json(item);
+});
+
+app.put("/api/perfis/:id", requerPerm("perfis", "editar"), (req, res) => {
+  const atual = listarPerfis().find((p) => p.id === req.params.id);
+  if (!atual) return res.status(404).json({ error: "perfil não encontrado" });
+  const atualizado = normalizarPerfil(req.body, atual);
+  const item = mutate((s) => {
+    const arr = s.perfis ?? [];
+    const i = arr.findIndex((p) => p.id === req.params.id);
+    if (i === -1) return null;
+    if (atualizado.padrao) for (const p of arr) if (p.id !== atualizado.id) p.padrao = false;
+    arr[i] = atualizado;
+    return arr[i];
+  });
+  if (!item) return res.status(404).json({ error: "perfil não encontrado" });
+  res.json(item);
+});
+
+app.delete("/api/perfis/:id", requerPerm("perfis", "excluir"), (req, res) => {
+  const alvo = listarPerfis().find((p) => p.id === req.params.id);
+  if (!alvo) return res.status(404).json({ error: "perfil não encontrado" });
+  // Perfis de SISTEMA (Administrador/Colaborador) são a rede de segurança do RBAC:
+  // sem eles um admin pode se trancar fora ou usuários ficarem sem fallback.
+  if (alvo.sistema) return res.status(400).json({ error: "perfil de sistema não pode ser excluído" });
+  const emUso = contarArtefatosComPerfil(alvo.id);
+  mutate((s) => {
+    s.perfis = (s.perfis ?? []).filter((p) => p.id !== req.params.id);
+    // Remove a referência dos artefatos para não sobrar perfil "fantasma" restringindo item.
+    for (const arr of [s.comunicados, s.eventos, s.social] as { perfis?: string[] }[][]) {
+      for (const item of arr ?? []) {
+        if (item.perfis?.includes(alvo.id)) item.perfis = item.perfis.filter((x) => x !== alvo.id);
+      }
+    }
+    return null;
+  });
+  res.json({ ok: true, artefatosAtualizados: emUso });
+});
+
+/** Quantos artefatos referenciam um perfil (informativo ao excluir). */
+function contarArtefatosComPerfil(id: string): number {
+  const s = getStore();
+  const listas: { perfis?: string[] }[][] = [s.comunicados, s.eventos, s.social];
+  return listas.reduce(
+    (n, arr) => n + (arr ?? []).filter((i) => i.perfis?.includes(id)).length,
+    0,
+  );
+}
 
 app.get("/api/agenda", async (req, res) => {
   const upn = (req.query.upn as string) || undefined;
   res.json(await getAgenda(upn));
 });
 
-app.get("/api/org", async (req, res) => {
+app.get("/api/org", requerPerm("organograma", "ver"), async (req, res) => {
   const upn = (req.query.upn as string) || undefined;
   // Diretório vem do cache diário (instantâneo); só cai ao vivo na 1ª vez / cache vazio.
   const diretorio = getCachedDiretorio();
   res.json(await getOrg(upn, diretorio ? { diretorio } : undefined));
 });
 
-app.get("/api/ferias", async (_req, res) => {
+app.get("/api/ferias", requerPerm("ferias", "ver"), async (_req, res) => {
   // Servido do scan diário (fixado). Fallback ao vivo só enquanto o cache não encheu.
   const cached = getCachedFerias();
   res.json(cached ?? (await getVacations()));
@@ -82,28 +222,33 @@ app.get("/api/departamentos", async (_req, res) => {
 });
 
 // ---------- CRUD genérico do store ----------
-function crud<T extends { id: string }>(
+// Protegido pelo RBAC: escrita exige a permissão recurso×ação e a LISTAGEM é filtrada pelos
+// perfis do usuário (artefato sem `perfis[]` = visível a todos; ver server/src/perfis.ts).
+function crud<T extends { id: string; perfis?: string[] }>(
   path: string,
   key: "comunicados" | "eventos" | "aniversariantes" | "links" | "social",
   idPrefix: string,
+  recurso: string,
   sort?: (a: T, b: T) => number,
   skipList = false,
 ) {
   if (!skipList) {
-    app.get(`/api/${path}`, (_req, res) => {
+    app.get(`/api/${path}`, requerPerm(recurso, "ver"), async (req, res) => {
       // key opcional (ex.: politicas) pode faltar num store persistido antigo → [] seguro.
       const list = [...((getStore()[key] as unknown as T[] | undefined) ?? [])];
       if (sort) list.sort(sort);
-      res.json(list);
+      res.json(filtrarPorPerfil(list, await acessoDaReq(req), recurso));
     });
   }
   // GET por id — usado pelas páginas de detalhe (comunicado/evento completo).
-  app.get(`/api/${path}/:id`, (req, res) => {
+  app.get(`/api/${path}/:id`, requerPerm(recurso, "ver"), async (req, res) => {
     const item = ((getStore()[key] as unknown as T[] | undefined) ?? []).find((x) => x.id === req.params.id);
     if (!item) return res.status(404).json({ error: "não encontrado" });
+    // Item restrito a outros perfis: responde 404 (não revela a existência do conteúdo).
+    if (!podeVer(item, await acessoDaReq(req), recurso)) return res.status(404).json({ error: "não encontrado" });
     res.json(item);
   });
-  app.post(`/api/${path}`, (req, res) => {
+  app.post(`/api/${path}`, requerPerm(recurso, "criar"), (req, res) => {
     const item = { ...req.body, id: newId(idPrefix) } as T;
     mutate((s) => {
       const arr = (s[key] as unknown as T[] | undefined) ?? ((s[key] as unknown as T[]) = []);
@@ -111,7 +256,7 @@ function crud<T extends { id: string }>(
     });
     res.status(201).json(item);
   });
-  app.put(`/api/${path}/:id`, (req, res) => {
+  app.put(`/api/${path}/:id`, requerPerm(recurso, "editar"), (req, res) => {
     const updated = mutate((s) => {
       const arr = (s[key] as unknown as T[] | undefined) ?? [];
       const i = arr.findIndex((x) => x.id === req.params.id);
@@ -122,7 +267,7 @@ function crud<T extends { id: string }>(
     if (!updated) return res.status(404).json({ error: "não encontrado" });
     res.json(updated);
   });
-  app.delete(`/api/${path}/:id`, (req, res) => {
+  app.delete(`/api/${path}/:id`, requerPerm(recurso, "excluir"), (req, res) => {
     const ok = mutate((s) => {
       const arr = (s[key] as unknown as T[] | undefined) ?? [];
       const i = arr.findIndex((x) => x.id === req.params.id);
@@ -135,13 +280,13 @@ function crud<T extends { id: string }>(
   });
 }
 
-crud<Comunicado>("comunicados", "comunicados", "com", (a, b) => {
+crud<Comunicado>("comunicados", "comunicados", "com", "comunicados", (a, b) => {
   if (!!b.fixado !== !!a.fixado) return b.fixado ? 1 : -1;
   return +new Date(b.publicadoEm) - +new Date(a.publicadoEm);
 });
 
 // Confirmação de leitura de um comunicado obrigatório. Registra o e-mail/UPN do usuário.
-app.post("/api/comunicados/:id/ler", (req, res) => {
+app.post("/api/comunicados/:id/ler", requerPerm("comunicados", "ver"), (req, res) => {
   const upn = String(req.body?.upn || "").toLowerCase();
   if (!upn) return res.status(400).json({ error: "upn obrigatório" });
   const updated = mutate((s) => {
@@ -156,12 +301,12 @@ app.post("/api/comunicados/:id/ler", (req, res) => {
   registrarPonto(upn, "confirmar_leitura", req.params.id);
   res.json(updated);
 });
-crud<Evento>("eventos", "eventos", "evt", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
+crud<Evento>("eventos", "eventos", "evt", "eventos", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
 
 // Aniversariantes: com Graph ligado, mescla os aniversários REAIS do Entra (campo birthday)
 // com os cadastrados manualmente pelo admin (store) — assim é sempre possível adicionar
 // alguém mesmo em modo Graph. Sem Graph (demo), usa só o store.
-app.get("/api/aniversariantes", async (_req, res) => {
+app.get("/api/aniversariantes", requerPerm("aniversariantes", "ver"), async (_req, res) => {
   const manuais = [...getStore().aniversariantes];
   if (isGraphOn) {
     try {
@@ -178,7 +323,7 @@ app.get("/api/aniversariantes", async (_req, res) => {
   manuais.sort((a, b) => a.dia - b.dia);
   res.json(manuais);
 });
-crud<Aniversariante>("aniversariantes", "aniversariantes", "ani", (a, b) => a.dia - b.dia, true);
+crud<Aniversariante>("aniversariantes", "aniversariantes", "ani", "aniversariantes", (a, b) => a.dia - b.dia, true);
 // ---------- Links úteis: personalizados por usuário ----------
 // Cada colaborador (admin ou não) mantém seus próprios atalhos. A chave é o UPN/e-mail
 // enviado em ?upn=. No primeiro edit, herda os atalhos padrão para não começar vazio.
@@ -200,18 +345,20 @@ function garanteLinksPessoais(s: import("./types.js").Store, chave: string): Lin
   return s.linksByUser[chave];
 }
 
-app.get("/api/links", (req, res) => {
-  res.json(linksDoUsuario(chaveUsuario(req.query.upn as string)));
+app.get("/api/links", requerPerm("links", "ver"), async (req, res) => {
+  const lista = linksDoUsuario(chaveUsuario(req.query.upn as string));
+  // Atalhos podem declarar `perfis[]` (link segregado) — filtra pelo acesso do usuário.
+  res.json(filtrarPorPerfil(lista, await acessoDaReq(req), "links"));
 });
 
-app.post("/api/links", (req, res) => {
+app.post("/api/links", requerPerm("links", "criar"), (req, res) => {
   const chave = chaveUsuario(req.query.upn as string);
   const item = { ...req.body, id: newId("lnk") } as LinkUtil;
   mutate((s) => garanteLinksPessoais(s, chave).push(item));
   res.status(201).json(item);
 });
 
-app.put("/api/links/:id", (req, res) => {
+app.put("/api/links/:id", requerPerm("links", "editar"), (req, res) => {
   const chave = chaveUsuario(req.query.upn as string);
   const updated = mutate((s) => {
     const arr = garanteLinksPessoais(s, chave);
@@ -224,7 +371,7 @@ app.put("/api/links/:id", (req, res) => {
   res.json(updated);
 });
 
-app.delete("/api/links/:id", (req, res) => {
+app.delete("/api/links/:id", requerPerm("links", "excluir"), (req, res) => {
   const chave = chaveUsuario(req.query.upn as string);
   const ok = mutate((s) => {
     const arr = garanteLinksPessoais(s, chave);
@@ -237,12 +384,12 @@ app.delete("/api/links/:id", (req, res) => {
   res.status(204).end();
 });
 
-crud<PublicacaoSocial>("social", "social", "soc", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
+crud<PublicacaoSocial>("social", "social", "soc", "social", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
 
 // ---------- Políticas de utilização interna ----------
 // NÃO são cadastradas no portal: são os documentos compartilhados com todos os colaboradores
 // numa pasta do SharePoint/OneDrive. Read-only — o portal só lista e abre os arquivos (Graph).
-app.get("/api/politicas", async (_req, res) => {
+app.get("/api/politicas", requerPerm("politicas", "ver"), async (_req, res) => {
   try {
     res.json(await getPoliticas());
   } catch (e) {
@@ -255,24 +402,21 @@ app.get("/api/politicas", async (_req, res) => {
 const REPORTE_TIPOS: ReporteTipo[] = ["bug", "melhoria", "outro"];
 const REPORTE_STATUS: ReporteStatus[] = ["aberto", "em_analise", "resolvido", "arquivado"];
 
-app.get("/api/reportes", async (req, res) => {
+app.get("/api/reportes", requerPerm("reportes", "ver"), async (req, res) => {
   const upn = upnDaRequisicao(req);
   const todos = [...(getStore().reportes ?? [])].sort(
     (a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm),
   );
-  // Admin vê tudo; colaborador vê só os que abriu (chave CANÔNICA colapsa oid⇄e-mail).
-  let ehAdmin = false;
-  try {
-    ehAdmin = (await getProfile(upn)).isAdmin;
-  } catch {
-    /* sem perfil — trata como não-admin */
-  }
-  if (ehAdmin) return res.json(todos);
+  // Quem GERENCIA reportes (admin ou perfil com "editar") vê tudo; os demais veem só os que
+  // abriram (chave CANÔNICA colapsa oid⇄e-mail).
+  const acesso = await acessoDaReq(req);
+  const gerencia = acesso.isAdmin || (acesso.permissoes.reportes ?? []).includes("editar");
+  if (gerencia) return res.json(todos);
   const eu = canonizar(upn);
   res.json(eu ? todos.filter((r) => canonizar(r.de) === eu) : []);
 });
 
-app.post("/api/reportes", (req, res) => {
+app.post("/api/reportes", requerPerm("reportes", "criar"), (req, res) => {
   const de = upnDaRequisicao(req);
   if (!de) return res.status(400).json({ error: "usuário não identificado" });
   const mensagem = String(req.body?.mensagem || "").trim();
@@ -297,11 +441,8 @@ app.post("/api/reportes", (req, res) => {
   res.status(201).json(item);
 });
 
-// ADMIN: atualiza o status de um reporte (triagem/andamento/resolução).
-app.put("/api/reportes/:id", async (req, res) => {
-  const upn = upnDaRequisicao(req);
-  const perfil = await getProfile(upn);
-  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores" });
+// ADMIN (ou perfil com permissão de editar reportes): atualiza o status de um reporte.
+app.put("/api/reportes/:id", requerPerm("reportes", "editar"), (req, res) => {
   const status = req.body?.status as ReporteStatus;
   if (!REPORTE_STATUS.includes(status)) return res.status(400).json({ error: "status inválido" });
   const updated = mutate((s) => {
@@ -315,11 +456,8 @@ app.put("/api/reportes/:id", async (req, res) => {
   res.json(updated);
 });
 
-// ADMIN: remove um reporte já tratado.
-app.delete("/api/reportes/:id", async (req, res) => {
-  const upn = upnDaRequisicao(req);
-  const perfil = await getProfile(upn);
-  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores" });
+// ADMIN (ou perfil com permissão de excluir reportes): remove um reporte já tratado.
+app.delete("/api/reportes/:id", requerPerm("reportes", "excluir"), (req, res) => {
   const ok = mutate((s) => {
     const arr = s.reportes ?? [];
     const i = arr.findIndex((x) => x.id === req.params.id);
@@ -342,14 +480,14 @@ function upnDaRequisicao(req: import("express").Request): string {
 app.get("/api/pontos/config", (_req, res) => res.json(PONTOS_CONFIG));
 
 // Ranking mensal (?mes=YYYY-MM, default mês atual).
-app.get("/api/pontos/ranking", (req, res) => {
+app.get("/api/pontos/ranking", requerPerm("ranking", "ver"), (req, res) => {
   const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
   res.json({ mes, entradas: ranking(mes) });
 });
 
 // EXTRATO ADMIN: pontuação do mês quebrada por DIA e por usuário (como cada um pontuou).
 // A UI só é oferecida a admins; aqui devolvemos os dados (o store não tem PII sensível).
-app.get("/api/pontos/atividade", (req, res) => {
+app.get("/api/pontos/atividade", requerPerm("ranking", "ver"), (req, res) => {
   const mes = /^\d{4}-\d{2}$/.test(String(req.query.mes)) ? String(req.query.mes) : mesAtual();
   res.json({ mes, dias: atividadeDiaria(mes) });
 });
@@ -373,7 +511,7 @@ app.post("/api/pontos", (req, res) => {
 
 // ---------- Aba de feedback ----------
 // Feed público dos feedbacks mais recentes (mural) — visível a todos.
-app.get("/api/feedbacks", (req, res) => {
+app.get("/api/feedbacks", requerPerm("feedback", "ver"), (req, res) => {
   const upn = upnDaRequisicao(req);
   // Enriquece cada feedback com nome/foto ATUAIS do diretório (o de/para pode ser um oid,
   // não um e-mail). Assim o mural e as listas mostram sempre o rosto e o nome corretos,
@@ -401,7 +539,7 @@ app.get("/api/feedbacks", (req, res) => {
 });
 
 // Envia um feedback a um colega. Concede pontos ao destinatário (e um bônus a quem envia).
-app.post("/api/feedbacks", (req, res) => {
+app.post("/api/feedbacks", requerPerm("feedback", "criar"), (req, res) => {
   const de = upnDaRequisicao(req);
   const para = String(req.body?.para || "").toLowerCase();
   const mensagem = String(req.body?.mensagem || "").trim();
@@ -435,11 +573,7 @@ app.post("/api/feedbacks", (req, res) => {
 // ADMIN: apaga um feedback e REVERTE os pontos vinculados a ele. Como os pontos de feedback são
 // deduplicados por dia+contraparte (1 pontuação por par/dia), só revertemos quando NÃO sobrar
 // nenhum outro feedback do MESMO par (de→para) no MESMO dia — senão a pontuação ainda é devida.
-app.delete("/api/feedbacks/:id", async (req, res) => {
-  const upn = upnDaRequisicao(req);
-  const perfil = await getProfile(upn);
-  if (!perfil.isAdmin) return res.status(403).json({ error: "apenas administradores podem apagar feedbacks" });
-
+app.delete("/api/feedbacks/:id", requerPerm("feedback", "excluir"), async (req, res) => {
   const alvo = (getStore().feedbacks ?? []).find((f) => f.id === req.params.id);
   if (!alvo) return res.status(404).json({ error: "feedback não encontrado" });
 
@@ -463,7 +597,7 @@ const TICKET_PRIOS: TicketPrioridade[] = ["baixa", "media", "alta", "critica"];
 
 // "Meus tickets": lista os chamados do usuário atual (separados por solicitante). Usa a chave
 // CANÔNICA (colapsa oid⇄e-mail) porque a identidade oscila entre GUID e e-mail conforme a sessão.
-app.get("/api/tickets", async (req, res) => {
+app.get("/api/tickets", requerPerm("tickets", "ver"), async (req, res) => {
   const eu = canonizar(upnDaRequisicao(req));
   let meus = eu
     ? [...(getStore().tickets ?? [])]
@@ -507,7 +641,7 @@ app.get("/api/tickets", async (req, res) => {
 
 // Abre um novo chamado. O servidor fixa status "aberto" e a data de início; o corpo só traz
 // título, descrição, tipo e prioridade. O solicitante vem da identidade da requisição.
-app.post("/api/tickets", async (req, res) => {
+app.post("/api/tickets", requerPerm("tickets", "criar"), async (req, res) => {
   const solicitante = upnDaRequisicao(req);
   if (!solicitante) return res.status(400).json({ error: "solicitante não identificado" });
   const titulo = String(req.body?.titulo || "").trim();
@@ -576,7 +710,7 @@ const port = config.apiPort;
 app.listen(port, "0.0.0.0", () => {
   console.log(
     `[portal-trustsis] API on :${port} — modo ${graphEnabled ? "GRAPH (Entra)" : "DEMO"}` +
-    ` — barreira ${authRequired ? "ATIVA (AUTH_REQUIRED)" : "off"}`,
+    ` — barreira ${authRequired() ? "ATIVA" : "off"}`,
   );
   // Scan diário do organograma + férias (só com Graph ligado; no-op em demo).
   startDailyScan();

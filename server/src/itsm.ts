@@ -15,6 +15,7 @@
 // divergir, ajuste SÓ em `montarCorpo()` / os headers abaixo.
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { config, itsmEnabled } from "./config.js";
+import { aoMudarIntegracao } from "./settings.js";
 import type { Ticket, TicketTipo, TicketPrioridade, TicketStatus } from "./types.js";
 
 // ---- mapeamento de enums (portal <-> ITSM .NET) ----
@@ -70,6 +71,12 @@ function client(): ConfidentialClientApplication {
   }
   return cca;
 }
+
+// Credenciais editadas na tela de Administração → descarta cliente e token antigos.
+aoMudarIntegracao(() => {
+  cca = null;
+  tokenCache = null;
+});
 
 let tokenCache: { value: string; exp: number } | null = null;
 async function getToken(): Promise<string> {

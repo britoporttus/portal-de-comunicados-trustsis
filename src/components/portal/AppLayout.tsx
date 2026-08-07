@@ -21,10 +21,14 @@ import { PontosBadge } from "./PontosBadge";
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
 function NavList({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
+  // O menu respeita o RBAC: só entram as páginas liberadas pelos perfis do usuário
+  // (itens de admin exigem perfil admin). O backend valida de novo em cada rota.
+  const { isAdmin, podeVerPagina } = usePortal();
+  const itens = NAV.filter((i) => (i.admin ? isAdmin : podeVerPagina(i.to)));
   return (
     <TooltipProvider delay={0}>
       <nav className={cn("flex flex-col gap-1", collapsed ? "px-2" : "px-3")}>
-        {NAV.map((item) => {
+        {itens.map((item) => {
           const link = (
             <NavLink
               key={item.to}
@@ -189,7 +193,9 @@ export default function AppLayout() {
 
         {/* Conteúdo */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl px-4 py-4 sm:py-4 lg:px-8 lg:py-5">
+          {/* Largura TOTAL: o conteúdo ocupa todo o espaço horizontal disponível ao lado da
+              sidebar (sem o antigo teto de max-w-7xl centralizado). */}
+          <div className="w-full px-4 py-4 sm:py-4 lg:px-8 lg:py-5">
             {mode === "demo" && (
               <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning">
                 <Badge variant="outline" className="border-warning/40 bg-warning/15 text-warning">Modo demo</Badge>

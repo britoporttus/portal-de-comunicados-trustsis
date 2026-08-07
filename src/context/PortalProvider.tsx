@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { authEnabled, login } from "@/lib/auth";
-import type { Me } from "@/lib/types";
+import { authAtivo, login } from "@/lib/auth";
+import type { Acao, Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
 
@@ -17,6 +17,13 @@ interface PortalState {
   needsLogin: boolean;
   login: () => void; // dispara o SSO por gesto do usuário (botão do gate)
   isAdmin: boolean; // papel efetivo (respeita "ver como usuário")
+  // RBAC (perfis de acesso do portal): o backend resolve o acesso EFETIVO do usuário
+  // (grupos do Entra → perfis → união das permissões) e o front usa para USABILIDADE —
+  // esconder menu/ações. A autoridade é sempre o backend (ver server/src/perfis.ts).
+  perfis: { id: string; nome: string }[];
+  paginas: string[]; // rotas liberadas para este usuário
+  pode: (recurso: string, acao: Acao) => boolean;
+  podeVerPagina: (rota: string) => boolean;
   verComoUsuario: boolean;
   setVerComoUsuario: (v: boolean) => void;
   theme: Theme;
@@ -91,12 +98,38 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
   const isAdmin = Boolean(me?.isAdmin) && !verComoUsuario;
+  const acesso = me?.acesso;
+  const perfis = useMemo(() => acesso?.perfis ?? [], [acesso]);
+  // Sem acesso no payload (backend antigo) cai no comportamento anterior: admin vê tudo.
+  const paginas = useMemo(() => acesso?.paginas ?? [], [acesso]);
+
+  const pode = useCallback(
+    (recurso: string, acao: Acao) => {
+      // "Ver como usuário": simula o colaborador comum — nenhuma ação de gestão.
+      if (verComoUsuario) return acao === "ver";
+      if (!acesso) return Boolean(me?.isAdmin);
+      if (acesso.isAdmin) return true;
+      return (acesso.permissoes?.[recurso] ?? []).includes(acao);
+    },
+    [acesso, me?.isAdmin, verComoUsuario],
+  );
+
+  const podeVerPagina = useCallback(
+    (rota: string) => {
+      if (!acesso) return true; // backend sem RBAC: não esconde nada
+      if (acesso.isAdmin) return true;
+      return paginas.includes(rota);
+    },
+    [acesso, paginas],
+  );
   // Com SSO ligado e sem usuário após carregar → precisa logar (força o SSO, sem demo).
-  const needsLogin = authEnabled && !loading && !me;
+  // authAtivo() é resolvido em RUNTIME (o main.tsx aguarda initAuth antes de renderizar),
+  // porque a configuração de SSO agora vem do backend e não do build.
+  const needsLogin = authAtivo() && !loading && !me;
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, needsLogin, login, isAdmin, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
+      value={{ me, loading, mode, needsLogin, login, isAdmin, perfis, paginas, pode, podeVerPagina, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
     >
       {children}
     </Ctx.Provider>

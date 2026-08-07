@@ -6,24 +6,12 @@ import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { usePortal } from "@/context/PortalProvider";
 import { iniciais } from "@/lib/format";
-import { TIPO_PONTO_META, TIPO_PONTO_ORDEM, nomeDoMes } from "@/lib/gamification";
+import { TIPO_PONTO_META, TIPO_PONTO_ORDEM, nomeDoMes, ultimosMeses } from "@/lib/gamification";
 import type { RankingEntry } from "@/lib/types";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
-import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
-
-/** Últimos 6 meses (YYYY-MM), do mais recente para o mais antigo. */
-function ultimosMeses(qtd = 6): string[] {
-  const out: string[] = [];
-  const d = new Date();
-  for (let i = 0; i < qtd; i++) {
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-    d.setMonth(d.getMonth() - 1);
-  }
-  return out;
-}
 
 const MEDALHA = ["text-warning", "text-muted-foreground", "text-[#cd7f32]"]; // ouro, prata, bronze
 
@@ -64,7 +52,7 @@ function Podio({ top, meUpn }: { top: RankingEntry[]; meUpn: string }) {
 }
 
 export default function RankingPage() {
-  const { me, isAdmin } = usePortal();
+  const { me } = usePortal();
   const meses = useMemo(() => ultimosMeses(), []);
   const [mes, setMes] = useState(meses[0]);
   const meUpn = (me?.email ?? "").toLowerCase();
@@ -219,8 +207,7 @@ export default function RankingPage() {
         </>
       )}
 
-      {/* Auditoria de admin: extrato de pontos por dia (quem pontuou e como). */}
-      {isAdmin && <AtividadePontosAdmin mes={mes} />}
+      {/* A auditoria de pontos por dia mora agora em Administração › Atividade de pontos. */}
     </div>
   );
 }

@@ -3,8 +3,9 @@
 // para que o portal continue funcionando no preview.
 import { ConfidentialClientApplication } from "@azure/msal-node";
 import { config, graphEnabled } from "./config.js";
-import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante, PoliticaDoc } from "./types.js";
-import { mockPeople, mockAgenda, mockOrg, mockVacations, mockPoliticas } from "./mock.js";
+import { aoMudarIntegracao } from "./settings.js";
+import type { Pessoa, AgendaItem, Ausencia, OrgNode, Aniversariante, PoliticaDoc, GrupoEntra } from "./types.js";
+import { mockPeople, mockAgenda, mockOrg, mockVacations, mockPoliticas, mockGrupos } from "./mock.js";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -21,6 +22,14 @@ function client(): ConfidentialClientApplication {
   }
   return cca;
 }
+
+// Ao mudar a configuração na tela de Administração, o cliente/token/caches montados com as
+// credenciais ANTIGAS ficam inválidos — descarta tudo para o próximo uso reconstruir.
+aoMudarIntegracao(() => {
+  cca = null;
+  tokenCache = null;
+  gruposCache.clear();
+});
 
 let tokenCache: { value: string; exp: number } | null = null;
 async function getToken(): Promise<string> {
@@ -167,7 +176,9 @@ async function fetchPhotoDataUrl(idOrUpn: string): Promise<string | undefined> {
   }
 }
 
-export const isGraphOn = graphEnabled;
+// Re-export do LIVE BINDING de config.ts: quem importa `isGraphOn` daqui vê o valor atual
+// (o admin pode ligar/desligar o Graph pela tela de Administração, sem restart).
+export { graphEnabled as isGraphOn };
 
 // Domínios IRMÃOS: um login de GUEST @porttus.com corresponde ao MEMBER equivalente
 // @trustsis.com (MESMA pessoa — porttus é a holding; o tenant trustsis é onde ficam
@@ -242,13 +253,68 @@ export async function getProfile(upn?: string): Promise<Pessoa & { isAdmin: bool
 
 async function checkAdmin(userId: string): Promise<boolean> {
   if (!config.entra.adminGroupId) return true; // sem grupo configurado: libera admin em demo
+  const { ids } = await getUserGroups(userId);
+  return ids.includes(config.entra.adminGroupId);
+}
+
+// ---------- Grupos do Entra (base do RBAC de perfis — ver server/src/perfis.ts) ----------
+// Cache CURTO por usuário: o acesso é resolvido em quase toda requisição protegida, então
+// consultar memberOf a cada chamada dobraria a latência. 5 min é o compromisso entre
+// refletir mudança de grupo rápido e não martelar o Graph.
+const GRUPOS_TTL_MS = 5 * 60_000;
+const gruposCache = new Map<string, { ids: string[]; nomes: string[]; exp: number }>();
+
+/** Grupos (ids + nomes) de que o usuário é membro. Vazio em modo demo/sem Graph. */
+export async function getUserGroups(
+  idOrUpn?: string,
+): Promise<{ ids: string[]; nomes: string[] }> {
+  const alvo = (idOrUpn || config.entra.demoUserUpn || "").toLowerCase();
+  if (!graphEnabled || !alvo) return { ids: [], nomes: [] };
+  const hit = gruposCache.get(alvo);
+  if (hit && hit.exp > Date.now()) return { ids: hit.ids, nomes: hit.nomes };
   try {
     const res = await graphGet<{ value: any[] }>(
-      `/users/${encodeURIComponent(userId)}/memberOf/microsoft.graph.group?$select=id`,
+      `/users/${encodeURIComponent(alvo)}/memberOf/microsoft.graph.group?$select=id,displayName&$top=200`,
     );
-    return res.value.some((g) => g.id === config.entra.adminGroupId);
-  } catch {
-    return false;
+    const ids = res.value.map((g) => String(g.id));
+    const nomes = res.value.map((g) => String(g.displayName ?? g.id));
+    gruposCache.set(alvo, { ids, nomes, exp: Date.now() + GRUPOS_TTL_MS });
+    return { ids, nomes };
+  } catch (e) {
+    console.warn("[graph] getUserGroups falhou:", (e as Error).message);
+    // Cacheia o vazio por pouco tempo para não repetir a falha a cada request.
+    gruposCache.set(alvo, { ids: [], nomes: [], exp: Date.now() + 30_000 });
+    return { ids: [], nomes: [] };
+  }
+}
+
+/** Catálogo de grupos do tenant — alimenta o multi-select da tela de perfis (o admin
+ *  ESCOLHE o grupo, não digita GUID). Requer Group.Read.All (Application). */
+export async function listGroups(): Promise<GrupoEntra[]> {
+  if (!graphEnabled) return mockGrupos();
+  try {
+    const out: GrupoEntra[] = [];
+    let next: string | null =
+      `${GRAPH}/groups?$select=id,displayName,description,mail&$orderby=displayName&$top=100`;
+    let guard = 0;
+    while (next && guard < 20) {
+      const res: { value: any[]; "@odata.nextLink"?: string } = await graphGetUrl(next);
+      for (const g of res.value) {
+        if (!g.displayName) continue;
+        out.push({
+          id: String(g.id),
+          nome: String(g.displayName),
+          descricao: g.description || undefined,
+          email: g.mail || undefined,
+        });
+      }
+      next = res["@odata.nextLink"] ?? null;
+      guard++;
+    }
+    return out;
+  } catch (e) {
+    console.warn("[graph] listGroups falhou:", (e as Error).message);
+    return [];
   }
 }
 
