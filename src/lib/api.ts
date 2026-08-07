@@ -5,7 +5,7 @@ import type {
   TipoPontoCliente, RankingEntry, ResumoPontos, PontosConfig, Feedback, FeedbacksResposta,
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
   Reporte, ReporteTipo, ReporteStatus, PoliticaDoc, Biblioteca,
-  Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig, Marca,
+  Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig, Marca, Auditoria,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -82,6 +82,13 @@ export const api = {
     create: (b: Partial<Evento>) => req<Evento>("/eventos", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<Evento>) => req<Evento>(`/eventos/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/eventos/${id}`, { method: "DELETE" }),
+    // Fase 3 — cria o compromisso na agenda (Outlook) de QUEM pediu. `demo: true` quando o
+    // Graph está desligado (preview): a marcação vale, mas nada é escrito no calendário.
+    adicionarNaAgenda: (id: string, upn?: string) =>
+      req<{ ok: boolean; ja?: boolean; demo?: boolean; evento: Evento }>(
+        comUpn(`/eventos/${id}/agenda`, upn),
+        { method: "POST" },
+      ),
   },
   aniversariantes: {
     list: () => req<Aniversariante[]>("/aniversariantes"),
@@ -100,10 +107,23 @@ export const api = {
       req<void>(`/links/${id}${upn ? `?upn=${encodeURIComponent(upn)}` : ""}`, { method: "DELETE" }),
   },
   social: {
-    list: () => req<PublicacaoSocial[]>("/social"),
+    // O UPN vai junto para o backend marcar `euCurti` (a comparação é por chave canônica).
+    list: (upn?: string) => req<PublicacaoSocial[]>(comUpn("/social", upn)),
     create: (b: Partial<PublicacaoSocial>) => req<PublicacaoSocial>("/social", { method: "POST", body: JSON.stringify(b) }),
     update: (id: string, b: Partial<PublicacaoSocial>) => req<PublicacaoSocial>(`/social/${id}`, { method: "PUT", body: JSON.stringify(b) }),
     remove: (id: string) => req<void>(`/social/${id}`, { method: "DELETE" }),
+    // ---- Fase 5: engajamento interno (curtidas/comentários vivem no portal) ----
+    curtir: (id: string, upn?: string) =>
+      req<PublicacaoSocial>(comUpn(`/social/${id}/curtir`, upn), { method: "POST" }).then(
+        (r) => (emitirPontosMudou(), r),
+      ),
+    comentar: (id: string, texto: string, deNome?: string, upn?: string) =>
+      req<PublicacaoSocial>(comUpn(`/social/${id}/comentarios`, upn), {
+        method: "POST",
+        body: JSON.stringify({ texto, deNome }),
+      }).then((r) => (emitirPontosMudou(), r)),
+    removerComentario: (id: string, cid: string, upn?: string) =>
+      req<PublicacaoSocial>(comUpn(`/social/${id}/comentarios/${cid}`, upn), { method: "DELETE" }),
   },
 
   // ---- Gamificação ----
@@ -165,7 +185,27 @@ export const api = {
 
   // ---- Políticas de utilização interna (documentos do SharePoint, read-only) ----
   politicas: {
-    list: () => req<PoliticaDoc[]>("/politicas"),
+    // Cada doc já vem com `obrigatoria` (decisão do admin) e `confirmadoEm` (deste usuário).
+    list: (upn?: string) => req<PoliticaDoc[]>(comUpn("/politicas", upn)),
+    // Link embutível para LER a política dentro do portal (null = cai no SharePoint).
+    preview: (docId: string) => req<{ url: string | null }>(`/politicas/${docId}/preview`),
+    // ADMIN: exigir (ou não) confirmação de leitura de um documento.
+    definirObrigatoria: (docId: string, obrigatoria: boolean, nome?: string, upn?: string) =>
+      req<{ docId: string; obrigatoria?: boolean }>(comUpn(`/politicas/${docId}/obrigatoria`, upn), {
+        method: "PUT",
+        body: JSON.stringify({ obrigatoria, nome }),
+      }),
+    // "Li e concordo" — idempotente, pontua uma única vez por documento.
+    confirmar: (docId: string, upn?: string) =>
+      req<{ docId: string; confirmadoEm: string }>(comUpn(`/politicas/${docId}/ler`, upn), {
+        method: "POST",
+      }).then((r) => (emitirPontosMudou(), r)),
+  },
+
+  // ---- Auditoria da administração (Fase 6): quem mudou o quê e quando ----
+  auditoria: {
+    list: (limite = 200, upn?: string) =>
+      req<Auditoria[]>(comUpn(`/auditoria?limite=${limite}`, upn)),
   },
 
   // ---- Atalhos da EMPRESA (institucionais/dashboards externos, segregados por perfil) ----
@@ -184,10 +224,13 @@ export const api = {
     // Documentos de UMA biblioteca (lidos do Graph, cache curto no servidor).
     docs: (id: string, forcar = false) =>
       req<PoliticaDoc[]>(`/bibliotecas/${id}/docs${forcar ? "?forcar=true" : ""}`),
-    create: (b: Partial<Biblioteca>) => req<Biblioteca>("/bibliotecas", { method: "POST", body: JSON.stringify(b) }),
-    update: (id: string, b: Partial<Biblioteca>) =>
-      req<Biblioteca>(`/bibliotecas/${id}`, { method: "PUT", body: JSON.stringify(b) }),
-    remove: (id: string) => req<void>(`/bibliotecas/${id}`, { method: "DELETE" }),
+    // upn vai junto para a AUDITORIA (Fase 6) atribuir a ação a quem a fez.
+    create: (b: Partial<Biblioteca>, upn?: string) =>
+      req<Biblioteca>(comUpn("/bibliotecas", upn), { method: "POST", body: JSON.stringify(b) }),
+    update: (id: string, b: Partial<Biblioteca>, upn?: string) =>
+      req<Biblioteca>(comUpn(`/bibliotecas/${id}`, upn), { method: "PUT", body: JSON.stringify(b) }),
+    remove: (id: string, upn?: string) =>
+      req<void>(comUpn(`/bibliotecas/${id}`, upn), { method: "DELETE" }),
   },
 
   // ---- RBAC: perfis de acesso do portal (Grupo do Entra → Perfil → Página/Artefato) ----

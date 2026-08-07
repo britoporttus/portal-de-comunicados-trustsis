@@ -16,6 +16,9 @@ const VALOR: Record<TipoPonto, number> = {
   ler_comunicado: 10,
   confirmar_leitura: 15,
   abrir_social: 8,
+  curtir_social: 3,
+  comentar_social: 6,
+  confirmar_politica: 15,
   feedback_enviado: 5,
   feedback_recebido: 20,
 };

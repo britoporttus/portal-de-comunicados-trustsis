@@ -58,6 +58,27 @@ async function graphGet<T = any>(path: string): Promise<T> {
   return graphGetUrl<T>(`${GRAPH}${path}`);
 }
 
+/** POST no Graph (usado para ESCREVER: criar evento no calendário, pedir preview de doc). */
+async function graphPost<T = any>(path: string, body: unknown): Promise<T> {
+  const token = await getToken();
+  const r = await fetch(`${GRAPH}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!r.ok) {
+    const texto = await r.text().catch(() => "");
+    throw new Error(`Graph ${r.status} em ${path}: ${texto.slice(0, 300)}`);
+  }
+  // 202/204 sem corpo (algumas ações) → devolve objeto vazio.
+  const txt = await r.text();
+  return (txt ? JSON.parse(txt) : {}) as T;
+}
+
 /** Lista TODOS os usuários do diretório (paginando @odata.nextLink), já filtrando
  *  contas sem nome/e-mail (salas, serviços). `extraSelect` adiciona campos ao $select. */
 async function listAllUsers(extraSelect = "", expand = ""): Promise<any[]> {
@@ -352,6 +373,47 @@ export async function getAgenda(upn?: string): Promise<AgendaItem[]> {
   }
 }
 
+/** Fase 3 — cria um compromisso no calendário do colaborador (Outlook).
+ *  App-only exige a permissão de APLICAÇÃO `Calendars.ReadWrite` com consentimento do admin;
+ *  sem ela o Graph responde 403 e devolvemos a mensagem para a UI explicar o que falta.
+ *  Sem Graph (preview/demo) devolve `demo: true` — a UI segue funcionando sem escrever nada. */
+export async function criarEventoNaAgenda(
+  upn: string,
+  ev: { titulo: string; descricao?: string; inicio: string; fim?: string; local?: string },
+): Promise<{ ok: boolean; demo?: boolean; id?: string; erro?: string }> {
+  const alvo = (upn || config.entra.demoUserUpn || "").trim();
+  if (!graphEnabled || !alvo) return { ok: true, demo: true };
+  // Fim ausente = 1 hora de duração (padrão razoável para um convite de portal).
+  const inicio = new Date(ev.inicio);
+  const fim = ev.fim ? new Date(ev.fim) : new Date(inicio.getTime() + 60 * 60_000);
+  try {
+    const criado = await graphPost<{ id?: string }>(
+      `/users/${encodeURIComponent(alvo)}/events`,
+      {
+        subject: ev.titulo,
+        body: { contentType: "text", content: ev.descricao || "Evento publicado no portal." },
+        start: { dateTime: inicio.toISOString().slice(0, 19), timeZone: "UTC" },
+        end: { dateTime: fim.toISOString().slice(0, 19), timeZone: "UTC" },
+        location: ev.local ? { displayName: ev.local } : undefined,
+        // O portal apenas COLOCA na agenda de quem pediu: nada de convidar terceiros.
+        isReminderOn: true,
+        reminderMinutesBeforeStart: 60,
+      },
+    );
+    return { ok: true, id: criado?.id };
+  } catch (e) {
+    const msg = (e as Error).message;
+    const semPermissao = /\b403\b/.test(msg);
+    console.warn("[graph] criarEventoNaAgenda falhou:", msg);
+    return {
+      ok: false,
+      erro: semPermissao
+        ? "O aplicativo não tem a permissão Calendars.ReadWrite (Application) concedida no Entra ID."
+        : msg,
+    };
+  }
+}
+
 /** Diretório COMPLETO da empresa (todos os usuários ATIVOS @trustsis.com ligados ao CEO,
  *  com foto). É a parte PESADA do organograma (listagem paginada + fotos) — por isso é
  *  extraída aqui para o scan diário (cache.ts) chamar 1x/dia, sem depender de um upn. */
@@ -567,6 +629,9 @@ function mapDoc(f: any, categoria?: string): PoliticaDoc {
 // Graph. TTL baixo de propósito (documento novo aparece rápido) e invalidável por `forcar`.
 const DOCS_TTL_MS = 5 * 60_000;
 const docsCache = new Map<string, { em: number; docs: PoliticaDoc[] }>();
+/** driveId resolvido por pasta compartilhada — necessário para pedir o PREVIEW de um item
+ *  (Fase 4) sem refazer a resolução do /shares a cada abertura de documento. */
+const driveDoShare = new Map<string, string>();
 
 /** Documentos (1 nível de subpastas) de QUALQUER pasta compartilhada do SharePoint/OneDrive.
  *  É o motor por trás das Políticas internas e das Bibliotecas de documentos (Fase 2):
@@ -583,6 +648,7 @@ export async function listarDocsDoShare(shareUrl: string, forcar = false): Promi
     const driveId: string | undefined = root?.parentReference?.driveId;
     const rootId: string | undefined = root?.id;
     if (!driveId || !rootId) return [];
+    driveDoShare.set(url, driveId);
 
     const top = await driveChildren(driveId, rootId);
     const docs: PoliticaDoc[] = [];
@@ -624,6 +690,33 @@ export async function listarDocsDoShare(shareUrl: string, forcar = false): Promi
 export async function getPoliticas(): Promise<PoliticaDoc[]> {
   if (!graphEnabled) return mockPoliticas();
   return listarDocsDoShare(config.politicas.shareUrl);
+}
+
+/** Fase 4 — URL EMBUTÍVEL (iframe) de um documento de uma pasta compartilhada. O Graph
+ *  devolve um link temporário de visualização (`/preview`), que é o que permite ler a
+ *  política DENTRO do portal antes de confirmar. Falhou (ou sem Graph)? Devolve null e a UI
+ *  cai no link do SharePoint. */
+export async function previewDoDoc(shareUrl: string, itemId: string): Promise<string | null> {
+  const url = (shareUrl || "").trim();
+  if (!graphEnabled || !url || !itemId) return null;
+  try {
+    let driveId = driveDoShare.get(url);
+    if (!driveId) {
+      // Cache frio: resolve a pasta (a listagem já preenche o mapa em uso normal).
+      const root = await graphGet<any>(`/shares/${encodeShareUrl(url)}/driveItem?$select=id,parentReference`);
+      driveId = root?.parentReference?.driveId;
+      if (!driveId) return null;
+      driveDoShare.set(url, driveId);
+    }
+    const r = await graphPost<{ getUrl?: string }>(
+      `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}/preview`,
+      {},
+    );
+    return r?.getUrl ?? null;
+  } catch (e) {
+    console.warn("[graph] previewDoDoc falhou:", (e as Error).message);
+    return null;
+  }
 }
 
 /** Quem está de férias/ausente: lê automaticRepliesSetting (out-of-office) via Graph.

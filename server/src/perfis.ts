@@ -36,7 +36,9 @@ export const RECURSOS: RecursoDef[] = [
   { chave: "aniversariantes", label: "Aniversariantes", acoes: TODAS },
   { chave: "links", label: "Links úteis", acoes: TODAS },
   { chave: "social", label: "Redes sociais", acoes: TODAS },
-  { chave: "politicas", label: "Políticas internas", acoes: SO_VER },
+  // "editar" em políticas = marcar/desmarcar a LEITURA OBRIGATÓRIA de um documento (Fase 4).
+  // Os arquivos continuam read-only (moram no SharePoint) — o portal só governa a exigência.
+  { chave: "politicas", label: "Políticas internas", acoes: ["ver", "editar"] },
   { chave: "bibliotecas", label: "Bibliotecas de documentos", acoes: TODAS },
   { chave: "atalhos", label: "Atalhos da empresa", acoes: TODAS },
   { chave: "tickets", label: "Tickets", acoes: ["ver", "criar"] },
@@ -152,6 +154,19 @@ const MIGRACOES: { id: string; aplicar: (p: Perfil) => void }[] = [
       p.permissoes.atalhos ??= p.admin ? [...totais] : ["ver"];
       p.paginas ??= [];
       if (!p.paginas.includes("/documentos")) p.paginas.push("/documentos");
+    },
+  },
+  {
+    // Fase 4: o recurso "politicas" ganhou a ação "editar" (exigir leitura confirmada de um
+    // documento). Só o ADMIN recebe: o colaborador continua apenas lendo/confirmando.
+    id: "fase4-politicas-obrigatorias",
+    aplicar: (p) => {
+      if (!p.sistema) return;
+      p.permissoes ??= {};
+      const atual = p.permissoes.politicas ?? ["ver"];
+      p.permissoes.politicas = p.admin && !atual.includes("editar")
+        ? [...atual, "editar"]
+        : atual;
     },
   },
 ];

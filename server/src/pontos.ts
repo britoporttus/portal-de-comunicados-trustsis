@@ -13,6 +13,9 @@ export const PONTOS_CONFIG: Record<TipoPonto, { pontos: number; label: string }>
   ler_comunicado: { pontos: 10, label: "Leu um comunicado" },
   confirmar_leitura: { pontos: 15, label: "Confirmou leitura obrigatória" },
   abrir_social: { pontos: 8, label: "Acessou uma rede social" },
+  curtir_social: { pontos: 3, label: "Curtiu uma publicação" },
+  comentar_social: { pontos: 6, label: "Comentou uma publicação" },
+  confirmar_politica: { pontos: 15, label: "Confirmou leitura de política" },
   feedback_enviado: { pontos: 5, label: "Enviou um feedback" },
   feedback_recebido: { pontos: 20, label: "Recebeu um feedback" },
 };
@@ -32,10 +35,14 @@ function dedupKey(upn: string, tipo: TipoPonto, refId?: string): string {
     case "visita_diaria":
       return `${upn}|visita_diaria|${diaAtual()}`; // 1x por dia
     case "abrir_social":
-      return `${upn}|abrir_social|${refId ?? "?"}|${diaAtual()}`; // 1x/dia por post
+    case "comentar_social":
+      return `${upn}|${tipo}|${refId ?? "?"}|${diaAtual()}`; // 1x/dia por post
     case "ler_comunicado":
     case "confirmar_leitura":
-      return `${upn}|${tipo}|${refId ?? "?"}`; // 1x por comunicado (para sempre)
+    case "curtir_social":
+    case "confirmar_politica":
+      // 1x por artefato, PARA SEMPRE (descurtir e curtir de novo não repontua).
+      return `${upn}|${tipo}|${refId ?? "?"}`;
     default:
       // feedback_*: ANTI-FARM. `refId` aqui é a CONTRAPARTE (para quem enviou / de quem
       // recebeu), não o id do feedback. Dedup por dia+contraparte → mandar vários feedbacks

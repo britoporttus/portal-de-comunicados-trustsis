@@ -2,7 +2,7 @@
 // Peça compartilhada entre as Políticas internas e as Bibliotecas de documentos (Fase 2):
 // os dois recursos usam o MESMO motor no backend (graph.ts › listarDocsDoShare), então a
 // apresentação também é uma só — cada subpasta vira uma seção (categoria).
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   ExternalLink, FileText, FileSpreadsheet, Presentation, FileImage, File as FileIcon,
 } from "lucide-react";
@@ -35,7 +35,18 @@ function tamanhoLegivel(bytes?: number): string | null {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function DocsLista({ docs }: { docs: PoliticaDoc[] }) {
+interface DocsListaProps {
+  docs: PoliticaDoc[];
+  /** Selo exibido ao lado do nome (ex.: "Leitura obrigatória" nas políticas). */
+  badge?: (d: PoliticaDoc) => ReactNode;
+  /** Ações extras à direita, antes do botão de abrir (ex.: alternar obrigatoriedade). */
+  acoes?: (d: PoliticaDoc) => ReactNode;
+  /** Quando informado, "Abrir" vira um BOTÃO que chama isto (ex.: ler no modal) em vez de
+   *  um link direto para o SharePoint. */
+  onAbrir?: (d: PoliticaDoc) => void;
+}
+
+export function DocsLista({ docs, badge, acoes, onAbrir }: DocsListaProps) {
   // Agrupa por categoria (subpasta), mantendo a ordem já vinda da API (categoria, nome).
   const grupos = useMemo(() => {
     const mapa = new Map<string, PoliticaDoc[]>();
@@ -68,23 +79,33 @@ export function DocsLista({ docs }: { docs: PoliticaDoc[] }) {
                     <Icon className="size-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{d.nome}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-medium text-foreground">{d.nome}</p>
+                      {badge?.(d)}
+                    </div>
                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                       {d.tipo ?? "Arquivo"}
                       {tam ? ` · ${tam}` : ""}
                       {d.atualizadoEm ? ` · Atualizado em ${dataLonga(d.atualizadoEm)}` : ""}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    render={
-                      <a href={d.webUrl} target="_blank" rel="noreferrer">
-                        <ExternalLink className="size-4" /> Abrir
-                      </a>
-                    }
-                  />
+                  {acoes?.(d)}
+                  {onAbrir ? (
+                    <Button variant="outline" size="sm" className="shrink-0" onClick={() => onAbrir(d)}>
+                      <ExternalLink className="size-4" /> Abrir
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      render={
+                        <a href={d.webUrl} target="_blank" rel="noreferrer">
+                          <ExternalLink className="size-4" /> Abrir
+                        </a>
+                      }
+                    />
+                  )}
                 </li>
               );
             })}

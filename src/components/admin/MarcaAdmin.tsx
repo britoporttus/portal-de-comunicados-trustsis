@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function MarcaAdmin() {
-  const { marca, setMarca } = usePortal();
+  const { marca, setMarca, me } = usePortal();
   // Rascunho local: o admin troca/remove os quatro logos e confirma com "Salvar".
   const [expandido, setExpandido] = useState("");
   const [colapsado, setColapsado] = useState("");
@@ -54,12 +54,15 @@ export function MarcaAdmin() {
     setOk(false);
     try {
       // Envia os quatro campos sempre: string vazia = remover aquele logo no backend.
-      const salvo = await api.marca.save({
-        logoExpandido: expandido,
-        logoColapsado: colapsado,
-        logoExpandidoEscuro: expandidoEscuro,
-        logoColapsadoEscuro: colapsadoEscuro,
-      });
+      const salvo = await api.marca.save(
+        {
+          logoExpandido: expandido,
+          logoColapsado: colapsado,
+          logoExpandidoEscuro: expandidoEscuro,
+          logoColapsadoEscuro: colapsadoEscuro,
+        },
+        me?.email,
+      );
       setMarca(salvo); // navbar atualiza na hora, sem F5
       setOk(true);
     } catch (e) {

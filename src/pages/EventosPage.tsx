@@ -15,6 +15,7 @@ import { diaSemana, faixaHorario } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
+import { BotaoAgenda } from "@/components/portal/BotaoAgenda";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -230,7 +231,7 @@ export default function EventosPage() {
                     )}
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Clock className="size-3.5" />
                       <span className="capitalize">{diaSemana(e.inicio)}</span>
@@ -243,6 +244,8 @@ export default function EventosPage() {
                         {e.local}
                       </span>
                     )}
+                    {/* Fase 3: manda o evento para o calendário do Outlook de quem clicar. */}
+                    <BotaoAgenda evento={e} className="ml-auto" />
                   </div>
                 </div>
               </div>

@@ -11,6 +11,7 @@ import { useState } from "react";
 import { FolderOpen, Plus, Pencil, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
+import { usePortal } from "@/context/PortalProvider";
 import type { Biblioteca } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ interface FormState {
 const VAZIO: FormState = { nome: "", descricao: "", shareUrl: "", icone: "folder", perfis: [] };
 
 export function BibliotecasAdmin() {
+  const { me } = usePortal();
   const { data, loading, reload } = useAsync(() => api.bibliotecas.list(), []);
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<Biblioteca | null>(null);
@@ -70,8 +72,8 @@ export function BibliotecasAdmin() {
     setErro(null);
     try {
       const corpo = { ...form, descricao: form.descricao.trim() || undefined };
-      if (editando) await api.bibliotecas.update(editando.id, corpo);
-      else await api.bibliotecas.create(corpo);
+      if (editando) await api.bibliotecas.update(editando.id, corpo, me?.email);
+      else await api.bibliotecas.create(corpo, me?.email);
       await reload();
       setAberto(false);
     } catch (e) {
@@ -82,7 +84,7 @@ export function BibliotecasAdmin() {
   };
 
   const excluir = async (id: string) => {
-    await api.bibliotecas.remove(id);
+    await api.bibliotecas.remove(id, me?.email);
     await reload();
   };
 

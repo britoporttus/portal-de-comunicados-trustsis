@@ -5,10 +5,11 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc } from "./graph.js";
 import { mockPeople } from "./mock.js";
 import {
-  acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeVer, requerPerm,
+  acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeNoAcesso, podeVer,
+  requerPerm,
 } from "./perfis.js";
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
 import { requireAuth, authRequired, origemDaIdentidade } from "./auth.js";
@@ -18,10 +19,11 @@ import {
   canonizar, reverterPontosFeedback,
 } from "./pontos.js";
 import { criarTicketNoItsm, sincronizarTicket, itsmEnabled } from "./itsm.js";
+import { auditar, listarAuditoria } from "./auditoria.js";
 import type {
   Comunicado, Evento, Aniversariante, LinkUtil, PublicacaoSocial, Feedback, TipoPonto,
   Ticket, TicketTipo, TicketPrioridade, Reporte, ReporteTipo, ReporteStatus,
-  Biblioteca, Acesso, Marca,
+  Biblioteca, Acesso, Marca, ComentarioSocial, PoliticaDoc,
 } from "./types.js";
 
 const app = express();
@@ -103,6 +105,7 @@ app.put("/api/marca", requerPerm("perfis", "editar"), (req, res) => {
     s.marca = atual;
     return atual;
   });
+  auditar(req, "marca.salvar", "Logos da navbar", CAMPOS.filter((k) => k in body).join(", "));
   res.json(salvo);
 });
 
@@ -116,7 +119,9 @@ app.get("/api/integracao", requerPerm("perfis", "ver"), (_req, res) => {
 app.put("/api/integracao", requerPerm("perfis", "editar"), (req, res) => {
   const quem = upnDaRequisicao(req);
   try {
-    res.json(salvarIntegracao(req.body ?? {}, quem || undefined));
+    const salvo = salvarIntegracao(req.body ?? {}, quem || undefined);
+    auditar(req, "integracao.salvar", "Integração (Entra / Graph / ITSM)");
+    res.json(salvo);
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }
@@ -141,6 +146,14 @@ app.post("/api/integracao/testar", requerPerm("perfis", "editar"), async (_req, 
   } catch (e) {
     res.json({ ok: false, detalhe: (e as Error).message });
   }
+});
+
+// ---------- auditoria (Fase 6): quem mudou o quê e quando ----------
+// Trilha das ações sensíveis de administração (perfis/permissões, integração, marca,
+// bibliotecas, obrigatoriedade de políticas). Só quem administra o portal enxerga.
+app.get("/api/auditoria", requerPerm("perfis", "ver"), (req, res) => {
+  const limite = Number(req.query.limite) || 200;
+  res.json(listarAuditoria(limite));
 });
 
 // ---------- pessoa atual / Graph ----------
@@ -195,6 +208,7 @@ app.post("/api/perfis", requerPerm("perfis", "criar"), (req, res) => {
     s.perfis.push(novo);
     return novo;
   });
+  auditar(req, "perfis.criar", item.nome);
   res.status(201).json(item);
 });
 
@@ -211,6 +225,10 @@ app.put("/api/perfis/:id", requerPerm("perfis", "editar"), (req, res) => {
     return arr[i];
   });
   if (!item) return res.status(404).json({ error: "perfil não encontrado" });
+  // Auditoria: permissões são o ativo mais sensível do portal — registra o que mudou.
+  const antes = JSON.stringify({ paginas: atual.paginas, permissoes: atual.permissoes, grupos: atual.gruposEntra });
+  const depois = JSON.stringify({ paginas: item.paginas, permissoes: item.permissoes, grupos: item.gruposEntra });
+  auditar(req, "perfis.editar", item.nome, antes === depois ? "sem mudança de acesso" : "acesso alterado");
   res.json(item);
 });
 
@@ -231,6 +249,7 @@ app.delete("/api/perfis/:id", requerPerm("perfis", "excluir"), (req, res) => {
     }
     return null;
   });
+  auditar(req, "perfis.excluir", alvo.nome, `${emUso} artefato(s) desvinculado(s)`);
   res.json({ ok: true, artefatosAtualizados: emUso });
 });
 
@@ -293,7 +312,17 @@ function crud<T extends { id: string; perfis?: string[] }>(
   recurso: string,
   sort?: (a: T, b: T) => number,
   skipList = false,
+  /** Quando informado, as ESCRITAS entram na trilha de auditoria com este prefixo de ação
+   *  (ex.: "atalhos" → atalhos.criar/editar/excluir). Use só em coleções publicadas pelo
+   *  ADMIN — conteúdo de alto volume encheria o log, que é limitado a 500 registros. */
+  auditarComo?: string,
 ) {
+  /** Rótulo legível do item para a trilha (as coleções auditadas têm `nome` ou `label`). */
+  const rotulo = (x: unknown, fallback: string) =>
+    String((x as { nome?: string; label?: string; titulo?: string })?.nome ??
+      (x as { label?: string })?.label ??
+      (x as { titulo?: string })?.titulo ??
+      fallback);
   if (!skipList) {
     app.get(`/api/${path}`, requerPerm(recurso, "ver"), async (req, res) => {
       // key opcional (ex.: politicas) pode faltar num store persistido antigo → [] seguro.
@@ -316,6 +345,7 @@ function crud<T extends { id: string; perfis?: string[] }>(
       const arr = (s[key] as unknown as T[] | undefined) ?? ((s[key] as unknown as T[]) = []);
       arr.unshift(item);
     });
+    if (auditarComo) auditar(req, `${auditarComo}.criar`, rotulo(item, item.id));
     res.status(201).json(item);
   });
   app.put(`/api/${path}/:id`, requerPerm(recurso, "editar"), (req, res) => {
@@ -327,9 +357,14 @@ function crud<T extends { id: string; perfis?: string[] }>(
       return arr[i];
     });
     if (!updated) return res.status(404).json({ error: "não encontrado" });
+    if (auditarComo) auditar(req, `${auditarComo}.editar`, rotulo(updated, req.params.id));
     res.json(updated);
   });
   app.delete(`/api/${path}/:id`, requerPerm(recurso, "excluir"), (req, res) => {
+    // O rótulo precisa ser lido ANTES da remoção — depois o item não existe mais.
+    const alvo = ((getStore()[key] as unknown as T[] | undefined) ?? []).find(
+      (x) => x.id === req.params.id,
+    );
     const ok = mutate((s) => {
       const arr = (s[key] as unknown as T[] | undefined) ?? [];
       const i = arr.findIndex((x) => x.id === req.params.id);
@@ -338,6 +373,7 @@ function crud<T extends { id: string; perfis?: string[] }>(
       return true;
     });
     if (!ok) return res.status(404).json({ error: "não encontrado" });
+    if (auditarComo) auditar(req, `${auditarComo}.excluir`, rotulo(alvo, req.params.id));
     res.status(204).end();
   });
 }
@@ -364,6 +400,41 @@ app.post("/api/comunicados/:id/ler", requerPerm("comunicados", "ver"), (req, res
   res.json(updated);
 });
 crud<Evento>("eventos", "eventos", "evt", "eventos", (a, b) => +new Date(a.inicio) - +new Date(b.inicio));
+
+// ---------- Fase 3: "Adicionar à minha agenda" (Outlook) ----------
+// O portal NÃO cria compromisso no calendário de terceiros: escreve apenas na agenda de
+// QUEM pediu (identidade resolvida pelo backend). Requer Calendars.ReadWrite (Application);
+// sem Graph (preview/demo) apenas marca o evento como "na agenda" para a UI ficar coerente.
+app.post("/api/eventos/:id/agenda", requerPerm("eventos", "ver"), async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  if (!upn) return res.status(400).json({ error: "usuário não identificado" });
+  const evento = (getStore().eventos ?? []).find((e) => e.id === req.params.id);
+  // Evento restrito a outros perfis: 404 (não revela a existência).
+  if (!evento || !podeVer(evento, await acessoDaReq(req), "eventos")) {
+    return res.status(404).json({ error: "não encontrado" });
+  }
+  const chave = canonizar(upn) || upn;
+  if ((evento.naAgenda ?? []).includes(chave)) {
+    return res.json({ ok: true, ja: true, evento });
+  }
+
+  const r = await criarEventoNaAgenda(upn, {
+    titulo: evento.titulo,
+    descricao: evento.descricao,
+    inicio: evento.inicio,
+    fim: evento.fim,
+    local: evento.local,
+  });
+  if (!r.ok) return res.status(502).json({ error: r.erro ?? "não foi possível criar o compromisso" });
+
+  const atualizado = mutate((s) => {
+    const e = s.eventos.find((x) => x.id === req.params.id);
+    if (!e) return null;
+    e.naAgenda = [...(e.naAgenda ?? []), chave];
+    return e;
+  });
+  res.json({ ok: true, demo: r.demo, evento: atualizado ?? evento });
+});
 
 // Aniversariantes: com Graph ligado, mescla os aniversários REAIS do Entra (campo birthday)
 // com os cadastrados manualmente pelo admin (store) — assim é sempre possível adicionar
@@ -450,10 +521,19 @@ app.delete("/api/links/:id", requerPerm("links", "excluir"), (req, res) => {
 // Diferente de /api/links (atalhos PESSOAIS de cada colaborador), estes são publicados pelo
 // admin e segregados por perfil — é aqui que entram Power BI e demais sistemas externos.
 // O portal não hospeda indicador nenhum: só aponta para a ferramenta de origem.
-crud<LinkUtil>("atalhos", "atalhos", "atl", "atalhos", (a, b) =>
-  (a.categoria ?? "").localeCompare(b.categoria ?? "", "pt-BR") ||
-  (a.ordem ?? 0) - (b.ordem ?? 0) ||
-  a.label.localeCompare(b.label, "pt-BR"),
+// Publicação institucional = ação de administração → entra na trilha de auditoria (Fase 6),
+// no mesmo nível de bibliotecas/perfis/marca.
+crud<LinkUtil>(
+  "atalhos",
+  "atalhos",
+  "atl",
+  "atalhos",
+  (a, b) =>
+    (a.categoria ?? "").localeCompare(b.categoria ?? "", "pt-BR") ||
+    (a.ordem ?? 0) - (b.ordem ?? 0) ||
+    a.label.localeCompare(b.label, "pt-BR"),
+  false,
+  "atalhos",
 );
 
 // ---------- Bibliotecas de documentos (Fase 2) ----------
@@ -507,6 +587,7 @@ app.post("/api/bibliotecas", requerPerm("bibliotecas", "criar"), (req, res) => {
   const item = normalizarBiblioteca(req.body ?? {});
   if (!item.shareUrl) return res.status(400).json({ error: "informe o link de compartilhamento da pasta" });
   mutate((s) => (s.bibliotecas ??= []).push(item));
+  auditar(req, "bibliotecas.criar", item.nome);
   res.status(201).json(item);
 });
 
@@ -519,10 +600,12 @@ app.put("/api/bibliotecas/:id", requerPerm("bibliotecas", "editar"), (req, res) 
     return arr[i];
   });
   if (!updated) return res.status(404).json({ error: "não encontrada" });
+  auditar(req, "bibliotecas.editar", updated.nome);
   res.json(updated);
 });
 
 app.delete("/api/bibliotecas/:id", requerPerm("bibliotecas", "excluir"), (req, res) => {
+  const alvo = (getStore().bibliotecas ?? []).find((x) => x.id === req.params.id);
   const ok = mutate((s) => {
     const arr = s.bibliotecas ?? [];
     const i = arr.findIndex((x) => x.id === req.params.id);
@@ -531,20 +614,193 @@ app.delete("/api/bibliotecas/:id", requerPerm("bibliotecas", "excluir"), (req, r
     return true;
   });
   if (!ok) return res.status(404).json({ error: "não encontrada" });
+  auditar(req, "bibliotecas.excluir", alvo?.nome ?? req.params.id);
   res.status(204).end();
 });
 
-crud<PublicacaoSocial>("social", "social", "soc", "social", (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm));
+// ---------- Redes sociais (Fase 5: engajamento INTERNO — curtir/comentar no portal) ----------
+// O CRUD do post continua genérico, mas a LISTAGEM é própria: precisa dizer, para o usuário
+// da requisição, se ELE já curtiu (a comparação é por chave canônica, que o cliente não tem)
+// e resolver a foto de quem comentou. Curtidas/comentários vivem no portal — nada é enviado
+// para a rede social de origem (o portal só aponta para a publicação lá).
+crud<PublicacaoSocial>("social", "social", "soc", "social", undefined, true);
+
+/** Projeta uma publicação para a resposta: `euCurti` + fotos atuais nos comentários. */
+function projetarSocial(p: PublicacaoSocial, eu: string): PublicacaoSocial {
+  return {
+    ...p,
+    curtidas: p.curtidas ?? [],
+    euCurti: Boolean(eu) && (p.curtidas ?? []).includes(eu),
+    comentarios: (p.comentarios ?? []).map((c) => ({
+      ...c,
+      deNome: c.deNome || perfilDeChave(c.de).nome,
+      deFoto: perfilDeChave(c.de).fotoUrl,
+    })),
+  };
+}
+
+app.get("/api/social", requerPerm("social", "ver"), async (req, res) => {
+  const eu = canonizar(upnDaRequisicao(req));
+  const lista = [...(getStore().social ?? [])].sort(
+    (a, b) => +new Date(b.publicadoEm) - +new Date(a.publicadoEm),
+  );
+  const visiveis = filtrarPorPerfil(lista, await acessoDaReq(req), "social");
+  res.json(visiveis.map((p) => projetarSocial(p, eu)));
+});
+
+/** Curtir/descurtir (toggle) uma publicação. Pontua só na PRIMEIRA curtida do post. */
+app.post("/api/social/:id/curtir", requerPerm("social", "ver"), async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const eu = canonizar(upn) || upn;
+  if (!eu) return res.status(400).json({ error: "usuário não identificado" });
+  const alvo = (getStore().social ?? []).find((p) => p.id === req.params.id);
+  if (!alvo || !podeVer(alvo, await acessoDaReq(req), "social")) {
+    return res.status(404).json({ error: "não encontrada" });
+  }
+  const atualizado = mutate((s) => {
+    const p = s.social.find((x) => x.id === req.params.id);
+    if (!p) return null;
+    const curtidas = new Set(p.curtidas ?? []);
+    if (curtidas.has(eu)) curtidas.delete(eu);
+    else curtidas.add(eu);
+    p.curtidas = [...curtidas];
+    return p;
+  });
+  if (!atualizado) return res.status(404).json({ error: "não encontrada" });
+  // Só concede pontos ao CURTIR (dedup por post: descurtir e curtir de novo não repontua).
+  if ((atualizado.curtidas ?? []).includes(eu)) registrarPonto(upn, "curtir_social", alvo.id);
+  res.json(projetarSocial(atualizado, eu));
+});
+
+/** Comenta numa publicação (comentário interno do portal). */
+app.post("/api/social/:id/comentarios", requerPerm("social", "ver"), async (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const eu = canonizar(upn) || upn;
+  const texto = String(req.body?.texto || "").trim();
+  if (!eu) return res.status(400).json({ error: "usuário não identificado" });
+  if (!texto) return res.status(400).json({ error: "comentário vazio" });
+  const alvo = (getStore().social ?? []).find((p) => p.id === req.params.id);
+  if (!alvo || !podeVer(alvo, await acessoDaReq(req), "social")) {
+    return res.status(404).json({ error: "não encontrada" });
+  }
+  const comentario: ComentarioSocial = {
+    id: newId("cms"),
+    de: eu,
+    deNome: String(req.body?.deNome || perfilDeChave(eu).nome),
+    texto: texto.slice(0, 600),
+    criadoEm: new Date().toISOString(),
+  };
+  const atualizado = mutate((s) => {
+    const p = s.social.find((x) => x.id === req.params.id);
+    if (!p) return null;
+    p.comentarios = [...(p.comentarios ?? []), comentario];
+    return p;
+  });
+  if (!atualizado) return res.status(404).json({ error: "não encontrada" });
+  registrarPonto(upn, "comentar_social", alvo.id);
+  res.status(201).json(projetarSocial(atualizado, eu));
+});
+
+/** Apaga um comentário: o AUTOR sempre pode; os demais só com permissão de excluir social. */
+app.delete("/api/social/:id/comentarios/:cid", requerPerm("social", "ver"), async (req, res) => {
+  const eu = canonizar(upnDaRequisicao(req));
+  const acesso = await acessoDaReq(req);
+  const gerencia = podeNoAcesso(acesso, "social", "excluir");
+  const post = (getStore().social ?? []).find((p) => p.id === req.params.id);
+  const alvo = post?.comentarios?.find((c) => c.id === req.params.cid);
+  if (!post || !alvo) return res.status(404).json({ error: "comentário não encontrado" });
+  if (!gerencia && canonizar(alvo.de) !== eu) {
+    return res.status(403).json({ error: "só o autor pode apagar o comentário" });
+  }
+  const atualizado = mutate((s) => {
+    const p = s.social.find((x) => x.id === req.params.id);
+    if (!p) return null;
+    p.comentarios = (p.comentarios ?? []).filter((c) => c.id !== req.params.cid);
+    return p;
+  });
+  res.json(projetarSocial(atualizado ?? post, eu));
+});
 
 // ---------- Políticas de utilização interna ----------
 // NÃO são cadastradas no portal: são os documentos compartilhados com todos os colaboradores
 // numa pasta do SharePoint/OneDrive. Read-only — o portal só lista e abre os arquivos (Graph).
-app.get("/api/politicas", requerPerm("politicas", "ver"), async (_req, res) => {
+// Fase 4: cada documento carrega o que é do PORTAL — se a leitura é OBRIGATÓRIA (decisão do
+// admin) e se o usuário da requisição já CONFIRMOU. O arquivo continua read-only no SharePoint.
+function projetarPolitica(d: PoliticaDoc, eu: string, gerencia: boolean): PoliticaDoc {
+  const s = getStore();
+  const conf = s.politicasConfig?.[d.id];
+  const confirmadoEm = eu ? s.politicasLidas?.[eu]?.[d.id] : undefined;
+  return {
+    ...d,
+    obrigatoria: Boolean(conf?.obrigatoria),
+    confirmadoEm,
+    // Contagem só para quem gerencia (o colaborador não precisa saber quem leu).
+    confirmacoes: gerencia
+      ? Object.values(s.politicasLidas ?? {}).filter((docs) => Boolean(docs[d.id])).length
+      : undefined,
+  };
+}
+
+app.get("/api/politicas", requerPerm("politicas", "ver"), async (req, res) => {
   try {
-    res.json(await getPoliticas());
+    const eu = canonizar(upnDaRequisicao(req));
+    const gerencia = podeNoAcesso(await acessoDaReq(req), "politicas", "editar");
+    const docs = await getPoliticas();
+    // Pendentes primeiro: o que exige confirmação e ainda não foi confirmado sobe para o topo.
+    const projetados = docs.map((d) => projetarPolitica(d, eu, gerencia));
+    projetados.sort((a, b) => {
+      const pa = a.obrigatoria && !a.confirmadoEm ? 0 : 1;
+      const pb = b.obrigatoria && !b.confirmadoEm ? 0 : 1;
+      return pa - pb;
+    });
+    res.json(projetados);
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
+});
+
+/** Link EMBUTÍVEL do documento (para ler a política dentro do portal, antes de confirmar).
+ *  Sem Graph/preview disponível devolve `url: null` e a UI cai no link do SharePoint. */
+app.get("/api/politicas/:docId/preview", requerPerm("politicas", "ver"), async (req, res) => {
+  const url = await previewDoDoc(config.politicas.shareUrl, req.params.docId);
+  res.json({ url });
+});
+
+/** ADMIN: exige (ou não) confirmação de leitura de um documento. */
+app.put("/api/politicas/:docId/obrigatoria", requerPerm("politicas", "editar"), (req, res) => {
+  const obrigatoria = Boolean(req.body?.obrigatoria);
+  const quem = upnDaRequisicao(req);
+  const salvo = mutate((s) => {
+    s.politicasConfig ??= {};
+    s.politicasConfig[req.params.docId] = {
+      obrigatoria,
+      definidoEm: new Date().toISOString(),
+      definidoPor: quem || undefined,
+    };
+    return s.politicasConfig[req.params.docId];
+  });
+  auditar(
+    req,
+    "politicas.obrigatoria",
+    String(req.body?.nome || req.params.docId),
+    obrigatoria ? "passou a exigir confirmação de leitura" : "deixou de exigir confirmação",
+  );
+  res.json({ docId: req.params.docId, ...salvo });
+});
+
+/** Confirmação de leitura ("Li e concordo") de uma política. Idempotente + pontua 1x. */
+app.post("/api/politicas/:docId/ler", requerPerm("politicas", "ver"), (req, res) => {
+  const upn = upnDaRequisicao(req);
+  const eu = canonizar(upn) || upn;
+  if (!eu) return res.status(400).json({ error: "usuário não identificado" });
+  const em = mutate((s) => {
+    s.politicasLidas ??= {};
+    s.politicasLidas[eu] ??= {};
+    s.politicasLidas[eu][req.params.docId] ??= new Date().toISOString();
+    return s.politicasLidas[eu][req.params.docId];
+  });
+  registrarPonto(upn, "confirmar_politica", req.params.docId);
+  res.json({ docId: req.params.docId, confirmadoEm: em });
 });
 
 // ---------- Feedback do portal (bug / melhoria / outro) ----------

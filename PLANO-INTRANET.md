@@ -326,8 +326,23 @@ página/ação e segregação de comunicados/eventos/links por perfil. É o pedi
 
 ---
 
-*Fases 0, 1 e 2 implementadas (ver Revisões 3 e 4 no topo). Próximo passo natural: **Fase 4**
-(políticas com leitura obrigatória e confirmação), que reaproveita as bibliotecas recém-criadas —
-ou a **Fase 3** (eventos → calendário), que depende da permissão `Calendars.ReadWrite`.
-Continuo aguardando as respostas da §7 (em especial 6 e 7: as URLs das pastas e quais dashboards
-entram, que agora são só cadastro na tela de Administração).*
+*Revisão 5 (2026-08-07) — **TODAS as fases 0–6 estão implementadas.** As três últimas foram
+entregues neste ciclo:*
+- ***Fase 3 (eventos → agenda):*** botão "Adicionar à minha agenda" nas páginas de eventos →
+  `POST /api/eventos/:id/agenda` → Graph `POST /users/{upn}/events`. Escreve apenas na agenda de
+  quem clica (nunca de terceiros). **Depende de consentimento `Calendars.ReadWrite` (Application)
+  no Entra** — sem ela, o Graph responde 403 e a UI exibe a instrução. Sem Graph (preview) só
+  marca o evento como "na agenda".
+- ***Fase 4 (políticas com confirmação):*** o admin marca um documento como de leitura
+  obrigatória; o colaborador lê num pop-up (preview embutido do Graph, com fallback para o
+  SharePoint) e registra "Li e concordo" (idempotente, pontua uma vez). Pendências sobem ao topo
+  e aparecem num aviso no cabeçalho. O arquivo continua read-only no SharePoint.
+- ***Fase 5 (redes sociais):*** curtir/comentar **internos ao portal** (nada é enviado à rede de
+  origem), com pontuação. A importação via API do LinkedIn continua fora (dependência externa) —
+  segue a publicação manual.
+- ***Fase 6 (admin central):*** nova aba **Administração › Auditoria** com a trilha de quem
+  alterou perfis/permissões, integração, marca, bibliotecas e obrigatoriedade de políticas.
+
+*Pendências que restam são **não-código** (§7): as URLs reais das pastas do SharePoint e quais
+dashboards entram (cadastro na tela de Administração) e o **consentimento `Calendars.ReadWrite`**
+no App Registration para a Fase 3 escrever no calendário.*

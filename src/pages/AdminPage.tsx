@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import {
   ShieldCheck, Activity, Stethoscope, Users, LayoutList, Wifi, WifiOff, PlugZap,
-  FolderOpen, LayoutGrid, Palette,
+  FolderOpen, LayoutGrid, Palette, History,
 } from "lucide-react";
 import { usePortal } from "@/context/PortalProvider";
 import { api } from "@/lib/api";
@@ -23,6 +23,7 @@ import { IntegracaoAdmin } from "@/components/admin/IntegracaoAdmin";
 import { BibliotecasAdmin } from "@/components/admin/BibliotecasAdmin";
 import { AtalhosAdmin } from "@/components/admin/AtalhosAdmin";
 import { MarcaAdmin } from "@/components/admin/MarcaAdmin";
+import { AuditoriaAdmin } from "@/components/admin/AuditoriaAdmin";
 import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { ScanStatus } from "@/components/portal/ScanStatus";
 
@@ -34,6 +35,7 @@ const ABAS = [
   { value: "marca", label: "Marca", icon: Palette },
   { value: "integracao", label: "Integração", icon: PlugZap },
   { value: "atividade", label: "Atividade de pontos", icon: Activity },
+  { value: "auditoria", label: "Auditoria", icon: History },
   { value: "diagnostico", label: "Diagnóstico", icon: Stethoscope },
 ] as const;
 
@@ -106,6 +108,11 @@ export default function AdminPage() {
             </NativeSelect>
           </div>
           <AtividadePontosAdmin mes={mes} />
+        </TabsContent>
+
+        {/* Fase 6: trilha de quem alterou perfis/permissões, integração, marca e bibliotecas. */}
+        <TabsContent value="auditoria">
+          <AuditoriaAdmin />
         </TabsContent>
 
         <TabsContent value="diagnostico">

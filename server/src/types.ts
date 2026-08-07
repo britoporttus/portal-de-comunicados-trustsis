@@ -36,6 +36,9 @@ export interface Evento {
   imagem?: string; // foto opcional (data URL comprimida) — aparece no lugar da data
   /** Perfis de acesso que enxergam o evento (vazio/ausente = todos). */
   perfis?: string[];
+  /** Fase 3 — quem já mandou este evento para a própria agenda do Outlook (chaves
+   *  canônicas). Evita duplicar o compromisso e permite a UI dizer "já está na sua agenda". */
+  naAgenda?: string[];
 }
 
 export interface Aniversariante {
@@ -81,6 +84,18 @@ export interface Biblioteca {
   atualizadoEm?: string;
 }
 
+/** Fase 5 — comentário INTERNO do portal numa publicação de rede social. Não vai para a
+ *  rede: é a conversa dos colaboradores sobre o post (engajamento medido no portal). */
+export interface ComentarioSocial {
+  id: string;
+  de: string; // chave canônica de quem comentou
+  deNome: string;
+  texto: string;
+  criadoEm: string; // ISO
+  /** Resolvida na leitura (não persistida) — mesma ideia dos feedbacks. */
+  deFoto?: string;
+}
+
 export interface PublicacaoSocial {
   id: string;
   rede: "linkedin" | "instagram" | "facebook" | "youtube";
@@ -91,6 +106,12 @@ export interface PublicacaoSocial {
   publicadoEm: string;
   /** Perfis de acesso que enxergam a publicação (vazio/ausente = todos). */
   perfis?: string[];
+  // ---- Fase 5: engajamento interno (curtidas/comentários vivem NO PORTAL) ----
+  /** Chaves canônicas de quem curtiu (a contagem é o length). */
+  curtidas?: string[];
+  comentarios?: ComentarioSocial[];
+  /** Resolvido na leitura para o usuário da requisição (não persistido). */
+  euCurti?: boolean;
 }
 
 // ---- RBAC do portal: Grupo do Entra → Perfil de acesso → Página/Artefato ----
@@ -151,6 +172,9 @@ export type TipoPonto =
   | "ler_comunicado" // abriu o detalhe de um comunicado (1x por comunicado)
   | "confirmar_leitura" // confirmou leitura de um comunicado obrigatório (1x por comunicado)
   | "abrir_social" // acessou uma publicação de rede social (1x/dia por post)
+  | "curtir_social" // curtiu uma publicação dentro do portal (1x por post)
+  | "comentar_social" // comentou uma publicação dentro do portal (1x/dia por post)
+  | "confirmar_politica" // confirmou a leitura de uma política obrigatória (1x por documento)
   | "feedback_enviado" // enviou um feedback a um colega
   | "feedback_recebido"; // recebeu um feedback de um colega
 
@@ -247,6 +271,34 @@ export interface PoliticaDoc {
   tamanho?: number; // bytes
   atualizadoEm?: string; // ISO — última modificação no SharePoint
   webUrl: string; // link para abrir/baixar o documento no SharePoint/OneDrive
+  // ---- Fase 4: leitura obrigatória + confirmação (campos resolvidos na LEITURA) ----
+  /** O admin exige leitura confirmada deste documento? (store: politicasConfig) */
+  obrigatoria?: boolean;
+  /** Quando o USUÁRIO da requisição confirmou a leitura (ISO) — ausente = pendente. */
+  confirmadoEm?: string;
+  /** Quantas pessoas já confirmaram (informativo; só vai para quem gerencia políticas). */
+  confirmacoes?: number;
+}
+
+/** Configuração por documento de política (o documento em si mora no SharePoint; aqui só
+ *  guardamos o que é do PORTAL — se a leitura é obrigatória e quem definiu isso). */
+export interface PoliticaConfig {
+  obrigatoria?: boolean;
+  definidoEm?: string;
+  definidoPor?: string;
+}
+
+// ---- Auditoria (Fase 6): trilha de "quem mudou o quê e quando" na administração ----
+export interface Auditoria {
+  id: string;
+  em: string; // ISO
+  quem: string; // upn/chave de quem fez
+  quemNome?: string;
+  /** Ação em formato `recurso.verbo` (ex.: "perfis.editar", "marca.salvar"). */
+  acao: string;
+  /** Alvo legível da ação (nome do perfil, da biblioteca, do documento…). */
+  alvo?: string;
+  detalhe?: string;
 }
 
 export interface Store {
@@ -269,6 +321,13 @@ export interface Store {
   tickets?: Ticket[];
   // Feedback do portal (bugs/melhorias). Políticas NÃO ficam no store: vêm do SharePoint.
   reportes?: Reporte[];
+  // Fase 4 — o que é do PORTAL sobre cada política do SharePoint: se a leitura é obrigatória
+  // (chave = id do documento no drive) e quem confirmou a leitura de quê.
+  politicasConfig?: Record<string, PoliticaConfig>;
+  /** politicasLidas[chaveCanonicaDoUsuario][docId] = ISO da confirmação. */
+  politicasLidas?: Record<string, Record<string, string>>;
+  // Fase 6 — trilha de auditoria das ações de administração (mais recentes primeiro).
+  auditoria?: Auditoria[];
   // RBAC: perfis de acesso do portal (opcional → store antigo de produção não reseta;
   // na primeira leitura os perfis de sistema são criados por garantirPerfis()).
   perfis?: Perfil[];

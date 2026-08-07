@@ -34,6 +34,8 @@ export interface Evento {
   imagem?: string; // foto opcional (data URL) — aparece no lugar da data
   /** Perfis de acesso que enxergam o evento (vazio/ausente = todos). */
   perfis?: string[];
+  /** Fase 3 — chaves de quem já enviou o evento para a própria agenda do Outlook. */
+  naAgenda?: string[];
 }
 
 export interface Aniversariante {
@@ -70,6 +72,16 @@ export interface Biblioteca {
   atualizadoEm?: string;
 }
 
+/** Fase 5 — comentário INTERNO do portal sobre uma publicação (não vai para a rede). */
+export interface ComentarioSocial {
+  id: string;
+  de: string;
+  deNome: string;
+  texto: string;
+  criadoEm: string;
+  deFoto?: string;
+}
+
 export interface PublicacaoSocial {
   id: string;
   rede: "linkedin" | "instagram" | "facebook" | "youtube";
@@ -79,6 +91,11 @@ export interface PublicacaoSocial {
   url: string;
   publicadoEm: string;
   perfis?: string[];
+  // ---- Fase 5: engajamento interno ----
+  curtidas?: string[];
+  comentarios?: ComentarioSocial[];
+  /** Resolvido pelo backend para o usuário atual (o cliente não conhece a chave canônica). */
+  euCurti?: boolean;
 }
 
 // ---- RBAC do portal: Grupo do Entra → Perfil de acesso → Página/Artefato ----
@@ -187,6 +204,9 @@ export type TipoPonto =
   | "ler_comunicado"
   | "confirmar_leitura"
   | "abrir_social"
+  | "curtir_social"
+  | "comentar_social"
+  | "confirmar_politica"
   | "feedback_enviado"
   | "feedback_recebido";
 
@@ -307,6 +327,24 @@ export interface PoliticaDoc {
   tamanho?: number; // bytes
   atualizadoEm?: string; // ISO
   webUrl: string; // abrir/baixar no SharePoint
+  // ---- Fase 4: leitura obrigatória + confirmação ----
+  /** O admin exige confirmação de leitura deste documento. */
+  obrigatoria?: boolean;
+  /** Quando ESTE usuário confirmou a leitura (ausente = pendente). */
+  confirmadoEm?: string;
+  /** Quantas pessoas confirmaram (só chega a quem gerencia políticas). */
+  confirmacoes?: number;
+}
+
+/** Registro da trilha de auditoria da administração (Fase 6). */
+export interface Auditoria {
+  id: string;
+  em: string;
+  quem: string;
+  quemNome?: string;
+  acao: string; // `recurso.verbo` — ex.: "perfis.editar"
+  alvo?: string;
+  detalhe?: string;
 }
 
 // ---- Configuração de integração (SSO / Entra ID / Graph / políticas / ITSM) ----

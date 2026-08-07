@@ -7,6 +7,7 @@ import { useAsync } from "@/lib/useAsync";
 import { diaSemana, dataLonga, faixaHorario } from "@/lib/format";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { Badge } from "@/components/ui/badge";
+import { BotaoAgenda } from "@/components/portal/BotaoAgenda";
 import { TIPO_META } from "./EventosPage";
 
 export default function EventoDetalhePage() {
@@ -84,6 +85,11 @@ export default function EventoDetalhePage() {
                 {e.descricao}
               </p>
             )}
+
+            {/* Fase 3: leva o evento para o calendário do Outlook de quem está lendo. */}
+            <div className="mt-5 border-t border-border pt-4">
+              <BotaoAgenda evento={e} />
+            </div>
           </div>
         </article>
       )}
