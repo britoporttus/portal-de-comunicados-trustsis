@@ -14,7 +14,7 @@
 // no Graph app-only que já funciona (substitui o DEMO_USER_UPN hardcoded).
 import type { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { config } from "./config.js";
+import { config, graphEnabled } from "./config.js";
 import { resolveDirectoryKey } from "./graph.js";
 import { aoMudarIntegracao, barreiraAtiva } from "./settings.js";
 
@@ -45,8 +45,28 @@ aoMudarIntegracao(() => {
   jwksCache = null;
 });
 
-/** Cabeçalho de IDENTIFICAÇÃO do modo preview (só honrado com a barreira desligada). */
-export const HEADER_IDENTIDADE = "x-portal-upn";
+/** De onde saiu a identidade DESTA requisição — é o que permite ao portal decidir se pode
+ *  exibir conteúdo (ver /api/me › `autenticado`).
+ *
+ *  - `token`   → usuário AUTENTICADO de verdade (idToken do Entra validado aqui). É o caso do
+ *                Edge/SSO em aba própria: quem entrou é quem o Entra disse que é.
+ *  - `preview` → sem token possível (portal embutido em iframe). A identidade é a ÚNICA que o
+ *                administrador sancionou em Administração › Integração ("identidade do
+ *                preview"). Não é escolhida por quem está usando.
+ *  - `demo`    → Entra não configurado: portal em modo demonstração (nada a exigir, senão uma
+ *                instalação nova ficaria trancada fora da própria tela de Administração).
+ *  - `nenhuma` → não há identidade confiável. O portal NÃO exibe conteúdo. */
+export type OrigemIdentidade = "token" | "preview" | "demo" | "nenhuma";
+
+const CHAVE_ORIGEM = "__origemIdentidade";
+
+function marcarOrigem(req: Request, origem: OrigemIdentidade): void {
+  (req as unknown as Record<string, OrigemIdentidade>)[CHAVE_ORIGEM] = origem;
+}
+
+export function origemDaIdentidade(req: Request): OrigemIdentidade {
+  return (req as unknown as Record<string, OrigemIdentidade>)[CHAVE_ORIGEM] ?? "nenhuma";
+}
 
 export interface TokenIdentity {
   oid?: string;
@@ -99,29 +119,33 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(401).json({ error: "não autenticado" });
       return;
     }
-    // MODO PREVIEW (barreira DESLIGADA). O portal roda embutido num iframe (preview do Hive),
-    // onde o login interativo do Entra é impossível — o Entra recusa ser embutido e popup é
-    // uma péssima experiência. Nesse cenário a identidade vem do cabeçalho abaixo, que o front
-    // preenche com o UPN ESCOLHIDO na lista de usuários REAIS do diretório do Entra
-    // (GET /api/identidades, alimentada pelo Graph app-only com as credenciais da tela de
-    // Administração). Ou seja: não é "login", é IDENTIFICAÇÃO — o portal abre direto e o
-    // usuário do preview diz quem é, e daí valem os grupos/perfis/RBAC reais dele.
+    // SEM TOKEN e sem barreira. O único cenário legítimo é o portal rodando EMBUTIDO num
+    // iframe (preview do Hive), onde o login do Entra é tecnicamente impossível: ele recusa
+    // ser embutido (X-Frame-Options) e a resposta de um popup não volta pelo armazenamento
+    // particionado do iframe.
     //
-    // SEGURANÇA: este caminho só existe com a barreira desligada. Ligada (produção), o
-    // cabeçalho é IGNORADO por completo — lá só o token do Entra identifica alguém.
-    const escolhido = String(req.headers[HEADER_IDENTIDADE] ?? "")
-      .toLowerCase()
-      .trim();
-    if (escolhido) {
-      let key = escolhido;
-      try {
-        key = await resolveDirectoryKey({ upn: escolhido, email: escolhido });
-      } catch {
-        /* Graph indisponível: usa o UPN cru mesmo */
-      }
-      (req.query as Record<string, unknown>).upn = key;
+    // Aqui a identidade NÃO é escolhida por quem está usando (antes era: um cabeçalho
+    // `x-portal-upn` com qualquer UPN do diretório — ou seja, dava para "entrar" como
+    // qualquer pessoa). Agora ela é ÚNICA e SANCIONADA pelo administrador: o UPN salvo em
+    // Administração › Integração ("identidade do preview" / DEMO_USER_UPN).
+    if (!graphEnabled) {
+      marcarOrigem(req, "demo"); // Entra não configurado: modo demonstração
+      return next();
     }
-    return next(); // sem escolha: segue como antes (DEMO_USER_UPN)
+    const sancionada = config.entra.demoUserUpn.trim().toLowerCase();
+    if (!sancionada) {
+      marcarOrigem(req, "nenhuma"); // nada confiável → o portal mostra o gate
+      return next();
+    }
+    let key = sancionada;
+    try {
+      key = await resolveDirectoryKey({ upn: sancionada, email: sancionada });
+    } catch {
+      /* Graph indisponível: usa o UPN cru mesmo */
+    }
+    (req.query as Record<string, unknown>).upn = key;
+    marcarOrigem(req, "preview");
+    return next();
   }
 
   try {
@@ -131,6 +155,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // transparente: /me, /agenda, /org e /links passam a operar sobre o usuário REAL logado.
     const key = await resolveDirectoryKey(id);
     (req.query as Record<string, unknown>).upn = key;
+    marcarOrigem(req, "token");
     next();
   } catch (e) {
     if (exigido) {

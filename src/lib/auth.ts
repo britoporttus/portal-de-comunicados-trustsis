@@ -121,9 +121,10 @@ function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
  *  aqui — nem redirect (mataria o frame) nem popup (a resposta não volta pelo armazenamento
  *  particionado do iframe, além de ser uma experiência ruim).
  *
- *  Por isso, EMBUTIDO o MSAL fica totalmente INERTE e o portal usa IDENTIFICAÇÃO por
- *  seleção: o backend lista os usuários reais do Entra (Graph app-only, credenciais da tela
- *  de Administração) e o usuário do preview escolhe quem é. Ver src/lib/identidade.ts. */
+ *  Por isso, EMBUTIDO o MSAL fica totalmente INERTE e a identidade é decidida pelo BACKEND:
+ *  vale a ÚNICA identidade que o administrador sancionou em Administração › Integração
+ *  ("identidade do preview"). Ninguém escolhe quem é pela interface — ver server/src/auth.ts
+ *  › requireAuth e o campo `autenticado` do /api/me. */
 export function emIframe(): boolean {
   try {
     return window.self !== window.top;
@@ -221,17 +222,24 @@ function clearStaleInteraction(): void {
 
 /** Dispara o loginRedirect de forma robusta: se a MSAL recusar por um
  *  `interaction_in_progress` preso, limpa o estado e tenta UMA vez mais. Em condições
- *  normais o primeiro loginRedirect já NAVEGA para fora e o catch nem roda. */
-async function robustLoginRedirect(app: PublicClientApplication): Promise<void> {
+ *  normais o primeiro loginRedirect já NAVEGA para fora e o catch nem roda.
+ *
+ *  `prompt` fica UNDEFINED no fluxo normal — e isso é o comportamento pedido: assim o Entra
+ *  reaproveita a sessão que o navegador já tem (o Edge corporativo entra com a conta do
+ *  Windows/perfil) e o login é TRANSPARENTE, sem tela de seleção. `select_account` só entra
+ *  quando o usuário pede explicitamente para trocar de conta (ver `trocarConta`). */
+async function robustLoginRedirect(
+  app: PublicClientApplication,
+  prompt?: "select_account",
+): Promise<void> {
+  const pedido = { scopes: LOGIN_SCOPES, ...(prompt ? { prompt } : {}) };
   try {
-    await app.loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" });
+    await app.loginRedirect(pedido);
   } catch {
     clearStaleInteraction();
-    await app
-      .loginRedirect({ scopes: LOGIN_SCOPES, prompt: "select_account" })
-      .catch(() => {
-        /* segue: o gate mostra o botão de tentar de novo */
-      });
+    await app.loginRedirect(pedido).catch(() => {
+      /* segue: o gate mostra o botão de tentar de novo */
+    });
   }
 }
 
@@ -281,10 +289,11 @@ export async function initAuth(): Promise<void> {
         return;
       }
 
-      // 2) Sem conta utilizável → login interativo por redirect (uma vez por aba).
-      //    `prompt: "select_account"` força o Entra a MOSTRAR o seletor de contas em
-      //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
-      //    — assim o usuário escolhe a conta TrustSis explicitamente.
+      // 2) Sem conta utilizável → redirect ÚNICO para o Entra, SEM `prompt`. É o SSO que o
+      //    portal precisa: no Edge corporativo (o navegador oficial da plataforma) a sessão
+      //    do usuário já está ativa, então o bounce é transparente — entra com QUEM ESTÁ
+      //    AUTENTICADO no navegador, sem tela de escolha. Fora do Edge, o Entra pede a conta
+      //    normalmente. Trocar de conta é uma ação EXPLÍCITA (ver `trocarConta`).
       if (!redirectInFlight()) {
         clearStaleInteraction(); // não há conta → qualquer status pendente é lixo
         markRedirect();
@@ -308,7 +317,7 @@ function activeAccount(): AccountInfo | null {
 export async function getAuthToken(): Promise<string | null> {
   await initAuth();
   if (!authAtivo()) return null;
-  if (emIframe()) return null; // preview: identidade por seleção, não por token
+  if (emIframe()) return null; // preview: identidade vem do backend, não de token
   const app = instance();
   const account = activeAccount();
   // Sem conta aqui = initAuth já disparou o redirect (ou o guardou). Não bloqueia a UI.
@@ -353,8 +362,11 @@ export async function getAuthToken(): Promise<string | null> {
  *
  *  Só existe em ABA PRÓPRIA (produção), via `loginRedirect` — a função navega para fora e o
  *  `true` nunca chega a ser lido. EMBUTIDO (preview) não há login interativo possível: é
- *  no-op, e a identificação acontece pelo seletor de usuário (lib/identidade.ts). */
-export async function login(): Promise<boolean> {
+ *  no-op, e a identidade é a única sancionada pelo admin (ver server/src/auth.ts).
+ *
+ *  `trocar` = true força o seletor de contas do Entra (`prompt: select_account`); sem isso o
+ *  login segue a conta já autenticada no navegador (SSO do Edge). */
+export async function login(trocar = false): Promise<boolean> {
   await carregarConfigAuth();
   if (!authAtivo() || emIframe()) return false;
   const app = instance();
@@ -363,8 +375,16 @@ export async function login(): Promise<boolean> {
   limparFalhasDeToken(); // gesto explícito do usuário: recomeça do zero
 
   markRedirect();
-  await robustLoginRedirect(app);
+  await robustLoginRedirect(app, trocar ? "select_account" : undefined);
   return true;
+}
+
+/** "Entrar com outra conta": descarta a conta em cache e manda o usuário ao seletor de contas
+ *  do Entra. É a válvula de escape para quem tem mais de uma conta corporativa no mesmo Edge
+ *  (ex.: @trustsis.com e um guest @porttus.com) — o fluxo normal entra direto com a conta do
+ *  navegador, então trocar tem que ser um gesto deliberado. */
+export async function trocarConta(): Promise<boolean> {
+  return login(true);
 }
 
 /** Conta ativa (para exibir nome/UPN, se necessário). */
@@ -383,8 +403,8 @@ export function getAccount(): AccountInfo | null {
  *  configurado devolve `true` — nesse cenário não existe login a exigir (modo demo). */
 export function temSessao(): boolean {
   if (!authAtivo()) return true;
-  // EMBUTIDO (preview): não existe sessão MSAL a exigir — o portal abre direto e a
-  // identidade é a escolhida no seletor (ou o usuário padrão). Nunca mostra gate.
+  // EMBUTIDO (preview): não existe sessão MSAL possível aqui. Quem valida a identidade é o
+  // backend (`/api/me › autenticado`), então este critério não se aplica.
   if (emIframe()) return true;
   return Boolean(getAccount());
 }

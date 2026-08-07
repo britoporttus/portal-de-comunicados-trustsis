@@ -8,20 +8,10 @@ import type {
   Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig,
 } from "./types";
 import { getAuthToken } from "./auth";
-import { identidadeEscolhida } from "./identidade";
 
 /** Evento global disparado sempre que o usuário GANHA pontos (leu comunicado, enviou
  *  feedback, confirmou leitura…). O badge do topo escuta e recarrega o resumo — assim os
  *  pontos/posição sincronizam na hora, sem precisar recarregar a página. */
-/** Usuário do diretório do Entra oferecido no seletor de identidade do preview. */
-export interface IdentidadeDisponivel {
-  nome: string;
-  email: string;
-  cargo?: string;
-  area?: string;
-  fotoUrl?: string;
-}
-
 export const PONTOS_EVENT = "pontos:mudou";
 export function emitirPontosMudou() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(PONTOS_EVENT));
@@ -39,15 +29,14 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   // Barreira de identidade: quando o SSO está ativo (produção), anexa o idToken como
   // Bearer. No preview (auth desligado) getAuthToken() devolve null e nada muda.
   const token = await getAuthToken();
-  // Preview (portal embutido em iframe): não há token possível — a identidade é o usuário
-  // escolhido no seletor do topo. O backend só honra isto com a barreira desligada.
-  const identidade = identidadeEscolhida();
+  // Sem token (portal embutido no preview, onde o login do Entra é impossível) o cliente NÃO
+  // diz quem é: quem decide a identidade é o backend, com a única identidade sancionada em
+  // Administração › Integração. Não existe mais cabeçalho de "entrar como".
   const r = await fetch(`/api${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(identidade ? { "x-portal-upn": identidade } : {}),
       ...(opts?.headers ?? {}),
     },
   });
@@ -59,9 +48,6 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 export const api = {
   health: () => req<{ ok: boolean; graph: boolean; mode: string }>("/health"),
   me: () => req<Me>("/me"),
-  /** Usuários reais do diretório do Entra, para o seletor de identidade do preview.
-   *  Responde 403 quando a barreira de autenticação está ativa (produção). */
-  identidades: () => req<IdentidadeDisponivel[]>("/identidades"),
   agenda: () => req<AgendaItem[]>("/agenda"),
   org: () => req<OrgNode>("/org"),
   ferias: () => req<Ausencia[]>("/ferias"),

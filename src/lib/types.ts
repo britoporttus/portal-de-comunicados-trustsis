@@ -133,6 +133,13 @@ export interface Me extends Pessoa {
   isAdmin: boolean;
   /** Acesso efetivo resolvido pelo backend (perfis, páginas e permissões). */
   acesso?: Acesso;
+  /** O backend confirmou uma identidade CONFIÁVEL nesta sessão? `false` = o portal não deve
+   *  exibir conteúdo (mostra o gate de acesso). Ausente (backend antigo) → assume true. */
+  autenticado?: boolean;
+  /** Como a identidade foi obtida: `token` (SSO do Entra), `preview` (a única identidade
+   *  sancionada pelo admin, usada dentro do iframe do preview), `demo` (Entra não
+   *  configurado) ou `nenhuma`. Ver server/src/auth.ts. */
+  origem?: "token" | "preview" | "demo" | "nenhuma";
 }
 
 export interface AgendaItem {

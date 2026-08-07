@@ -232,22 +232,28 @@ export async function resolveDirectoryKey(id: {
   return resolved;
 }
 
-/** Perfil do colaborador atual (DEMO_USER_UPN em modo app-only, ou o UPN passado). */
-export async function getProfile(upn?: string): Promise<Pessoa & { isAdmin: boolean }> {
+/** Perfil do colaborador atual (identidade do preview em modo app-only, ou o UPN passado).
+ *
+ *  `resolvido` diz se a pessoa veio DE FATO do diretório do Entra (true) ou se é o usuário
+ *  fictício de demonstração (false). O /api/me usa isso para decidir se existe identidade
+ *  confiável — sem ela o portal mostra o gate de acesso em vez do conteúdo. */
+export async function getProfile(
+  upn?: string,
+): Promise<Pessoa & { isAdmin: boolean; resolvido: boolean }> {
   const target = upn || config.entra.demoUserUpn;
   if (!graphEnabled || !target) {
     const p = mockPeople[0];
-    return { ...p, isAdmin: true };
+    return { ...p, isAdmin: true, resolvido: false };
   }
   try {
     const u = await graphGet(`/users/${encodeURIComponent(target)}?$select=${SELECT}`);
     const pessoa = mapPessoa(u);
     pessoa.fotoUrl = await fetchPhotoDataUrl(target);
     const isAdmin = await checkAdmin(u.id);
-    return { ...pessoa, isAdmin };
+    return { ...pessoa, isAdmin, resolvido: true };
   } catch (e) {
     console.warn("[graph] getProfile falhou, usando demo:", (e as Error).message);
-    return { ...mockPeople[0], isAdmin: true };
+    return { ...mockPeople[0], isAdmin: true, resolvido: false };
   }
 }
 

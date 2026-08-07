@@ -395,8 +395,8 @@ export function IntegracaoAdmin() {
           />
           <Campo
             {...props("demoUserUpn")}
-            label="Usuário de demonstração (UPN)"
-            hint="Identidade assumida no preview, quando não há login SSO."
+            label="Identidade do preview (UPN)"
+            hint="ÚNICO usuário que o portal assume quando roda embutido (preview), onde o login do Entra é impossível. Vazio = sem SSO o portal não exibe conteúdo."
             placeholder="pessoa@empresa.com.br"
           />
         </div>

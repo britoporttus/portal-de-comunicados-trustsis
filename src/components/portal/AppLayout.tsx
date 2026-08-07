@@ -17,8 +17,6 @@ import { Brand } from "./shared";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ThemePicker } from "./ThemePicker";
 import { PontosBadge } from "./PontosBadge";
-import IdentidadePicker from "./IdentidadePicker";
-import { modoPreview } from "@/lib/identidade";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
@@ -170,34 +168,29 @@ export default function AppLayout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Alternar tema">
               {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
             </Button>
-            {/* Embutido (preview): o bloco do usuário vira SELETOR de identidade — é assim que
-                quem está no preview "entra" como uma pessoa real do Entra, já que o login
-                interativo é impossível dentro de um iframe. Em aba própria (produção), segue
-                sendo o atalho para a conta Microsoft do usuário autenticado. */}
-            {modoPreview() ? (
-              <IdentidadePicker />
-            ) : (
-              <a
-                href={MYACCOUNT_URL}
-                target="_blank"
-                rel="noreferrer"
-                title="Minha conta Microsoft"
-                className="flex items-center gap-2.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:border-primary/40 hover:bg-secondary"
-              >
-                <Avatar className="size-8">
-                  {me?.fotoUrl && <AvatarImage src={me.fotoUrl} alt={me.nome} />}
-                  <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
-                    {me ? iniciais(me.nome) : "··"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="hidden text-left leading-tight sm:block">
-                  <div className="text-xs font-semibold text-foreground">{me?.nome ?? "Colaborador"}</div>
-                  <div className="max-w-[160px] truncate text-[10px] text-muted-foreground">
-                    {me?.cargo ?? "Colaborador"}
-                  </div>
+            {/* Bloco do usuário AUTENTICADO. Não existe mais seletor de "entrar como": a
+                identidade vem do SSO (aba própria) ou, no preview embutido, é a única que o
+                admin sancionou em Administração › Integração. */}
+            <a
+              href={MYACCOUNT_URL}
+              target="_blank"
+              rel="noreferrer"
+              title="Minha conta Microsoft"
+              className="flex items-center gap-2.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:border-primary/40 hover:bg-secondary"
+            >
+              <Avatar className="size-8">
+                {me?.fotoUrl && <AvatarImage src={me.fotoUrl} alt={me.nome} />}
+                <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
+                  {me ? iniciais(me.nome) : "··"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden text-left leading-tight sm:block">
+                <div className="text-xs font-semibold text-foreground">{me?.nome ?? "Colaborador"}</div>
+                <div className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                  {me?.cargo ?? "Colaborador"}
                 </div>
-              </a>
-            )}
+              </div>
+            </a>
           </div>
         </header>
 
@@ -210,6 +203,16 @@ export default function AppLayout() {
               <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-2.5 text-xs text-warning">
                 <Badge variant="outline" className="border-warning/40 bg-warning/15 text-warning">Modo demo</Badge>
                 Exibindo dados de exemplo. Configure as credenciais do Entra ID para carregar dados reais.
+              </div>
+            )}
+            {/* TRANSPARÊNCIA: dentro do preview embutido não há SSO possível, então o portal
+                roda com a identidade única definida em Administração › Integração. Deixar isso
+                explícito evita confundir esta sessão com um login de verdade. */}
+            {me?.origem === "preview" && (
+              <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-xs text-muted-foreground">
+                <Badge variant="outline">Identidade do preview</Badge>
+                Sem login interativo neste contexto: o portal assume {me.email ?? me.nome},
+                a identidade definida em Administração › Integração.
               </div>
             )}
             {isHome && <PageGreeting />}

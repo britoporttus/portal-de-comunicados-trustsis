@@ -11,7 +11,7 @@ import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeVer, requerPerm,
 } from "./perfis.js";
 import { getCachedDiretorio, getCachedFerias, getSnapshotMeta, runScan, startDailyScan } from "./cache.js";
-import { requireAuth, authRequired } from "./auth.js";
+import { requireAuth, authRequired, origemDaIdentidade } from "./auth.js";
 import { integracaoMascarada, salvarIntegracao } from "./settings.js";
 import {
   registrarPonto, ranking, resumoDoUsuario, mesAtual, PONTOS_CONFIG, perfilDeChave, atividadeDiaria,
@@ -50,35 +50,11 @@ app.get("/api/config/auth", (_req, res) => {
   });
 });
 
-// ---------- identidades do preview (público, ANTES da barreira) ----------
-// Lista os usuários REAIS do diretório do Entra (Graph app-only, credenciais da tela de
-// Administração) para o portal embutido no preview poder IDENTIFICAR quem está usando —
-// sem login interativo, que é impossível dentro de um iframe.
-// Só existe com a barreira DESLIGADA: em produção quem identifica é o token do Entra.
-app.get("/api/identidades", async (_req, res) => {
-  if (authRequired()) {
-    res.status(403).json({ error: "indisponível: a barreira de autenticação está ativa" });
-    return;
-  }
-  try {
-    const pessoas =
-      getCachedDiretorio() ?? (graphEnabled ? await fetchDiretorioLive() : mockPeople);
-    res.json(
-      pessoas
-        .filter((p) => p.email)
-        .map((p) => ({
-          nome: p.nome,
-          email: p.email,
-          cargo: p.cargo,
-          area: p.area,
-          fotoUrl: p.fotoUrl,
-        }))
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
-    );
-  } catch (e) {
-    res.status(500).json({ error: (e as Error).message });
-  }
-});
+// NOTA: aqui existia um `GET /api/identidades` que listava o diretório inteiro para o
+// preview "entrar como" qualquer pessoa do Entra. Foi REMOVIDO de propósito: identidade não
+// se escolhe. Em aba própria quem identifica é o token do SSO; no preview (iframe, onde o
+// login é impossível) vale a ÚNICA identidade sancionada pelo admin em Administração ›
+// Integração — ver server/src/auth.ts › requireAuth.
 
 // Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando desligada).
 app.use("/api", requireAuth);
@@ -128,7 +104,15 @@ app.get("/api/me", async (req, res) => {
   const upn = (req.query.upn as string) || undefined;
   try {
     const [pessoa, acesso] = await Promise.all([getProfile(upn), acessoDaReq(req)]);
-    res.json({ ...pessoa, isAdmin: acesso.isAdmin, acesso });
+    const origem = origemDaIdentidade(req);
+    // IDENTIDADE CONFIÁVEL? É o que o front usa para exibir (ou não) o conteúdo do portal:
+    //  - `demo`: Entra nem configurado → não há login a exigir (senão uma instalação nova
+    //    ficaria trancada fora da própria tela de Administração);
+    //  - `token`/`preview`: só vale se a pessoa foi de fato resolvida no diretório;
+    //  - `nenhuma`: sem token e sem identidade sancionada → o portal mostra o gate.
+    const autenticado = origem === "demo" ? true : origem !== "nenhuma" && pessoa.resolvido;
+    const { resolvido: _resolvido, ...dados } = pessoa;
+    res.json({ ...dados, isAdmin: acesso.isAdmin, acesso, autenticado, origem });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }

@@ -3,28 +3,37 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import logo from "@/assets/logo-trustsis.png";
 import { usePortal } from "@/context/PortalProvider";
-import { emIframe } from "@/lib/auth";
+import { authAtivo, emIframe } from "@/lib/auth";
 
-// Gate de acesso do portal: enquanto não há sessão do Entra, o portal NÃO exibe dados de
-// demonstração — mostra esta tela, que leva ao SSO corporativo.
+// GATE DE ACESSO. A porta de entrada do portal é a HOME — este componente só aparece quando
+// não há usuário identificado, e existe justamente para o portal NUNCA exibir conteúdo
+// (nem dados de demonstração) para alguém que não foi autenticado.
 //
-//  - ABA PRÓPRIA (produção): o initAuth já tentou o redirect automático; esta tela dispara
-//    de novo ao montar e, se ainda assim nada navegar (política do navegador, estado preso
-//    do Edge que restaura abas), oferece o botão manual.
+//  - ABA PRÓPRIA (uso normal, Edge): o initAuth já tentou o SSO automático — sem `prompt`,
+//    ou seja, entrando com a conta que já está autenticada no navegador. Esta tela dispara de
+//    novo ao montar e, se ainda assim nada navegar (política do navegador, estado preso do
+//    Edge que restaura abas), oferece o botão manual + "entrar com outra conta".
 //
-//  - EMBUTIDO em iframe (preview do Hive): normalmente esta tela NEM APARECE — lá o portal
-//    abre direto na home e a identificação é por seleção de usuário do Entra (ver
-//    lib/identidade.ts + IdentidadePicker). Só chega aqui se a BARREIRA do backend estiver
-//    ligada, e nesse caso o único caminho é abrir o portal em aba própria: dentro de um
-//    iframe o Entra recusa autenticar (nem redirect, nem popup).
+//  - EMBUTIDO em iframe (preview do Hive): a Microsoft recusa autenticar dentro de um quadro
+//    embutido — nem redirect, nem popup. Lá a identidade é a ÚNICA sancionada pelo admin em
+//    Administração › Integração ("identidade do preview"); se ela não estiver configurada,
+//    cai aqui: o caminho é configurá-la ou abrir o portal numa aba de verdade.
 export default function AuthGate() {
-  const { login } = usePortal();
+  const { login, trocarConta, me } = usePortal();
   const embutido = emIframe();
-  const [redirecting, setRedirecting] = useState(!embutido);
+  const ssoLigado = authAtivo();
+  // CASO ESPECÍFICO: o token do Entra é VÁLIDO (origem "token"), mas o backend não conseguiu
+  // resolver a pessoa no diretório (Graph fora do ar, usuário sem objeto neste tenant). Aqui
+  // reautenticar não resolve NADA — mandar o usuário ao SSO de novo só produziria ida e volta.
+  // Então a tela para de empurrar login e diz o que realmente está acontecendo.
+  const tokenSemDiretorio = me?.origem === "token";
+  const podeTentarLogin = !embutido && ssoLigado && !tokenSemDiretorio;
+  // Sem SSO configurado não há login a disparar: a tela é informativa (ex.: backend fora do ar).
+  const [redirecting, setRedirecting] = useState(podeTentarLogin);
   const [erro, setErro] = useState<string | null>(null);
   const kicked = useRef(false);
 
-  async function entrar() {
+  async function entrar(trocar = false) {
     // Embutido: nada de popup — abre o portal numa aba de verdade, onde o SSO funciona.
     if (embutido) {
       window.open(window.location.href, "_blank", "noopener");
@@ -33,7 +42,7 @@ export default function AuthGate() {
     setErro(null);
     setRedirecting(true);
     try {
-      const ok = await login();
+      const ok = await (trocar ? trocarConta() : login());
       if (!ok) setRedirecting(false);
     } catch (e) {
       setRedirecting(false);
@@ -42,14 +51,14 @@ export default function AuthGate() {
   }
 
   // Em aba própria, empurra o SSO automaticamente UMA vez ao montar (o auto-redirect do
-  // initAuth pode não ter navegado). Embutido, nunca: popup sem gesto é bloqueado.
+  // initAuth pode não ter navegado). Embutido, nunca: não há fluxo interativo possível.
   useEffect(() => {
-    if (embutido || kicked.current) return;
+    if (!podeTentarLogin || kicked.current) return;
     kicked.current = true;
     login().catch(() => setErro(null));
     const t = setTimeout(() => setRedirecting(false), 2500);
     return () => clearTimeout(t);
-  }, [login, embutido]);
+  }, [login, podeTentarLogin]);
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background px-4">
@@ -61,25 +70,62 @@ export default function AuthGate() {
         />
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Acesso restrito</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Entre com sua conta corporativa TrustSis para acessar o portal.
+          {tokenSemDiretorio
+            ? "Sua conta foi autenticada, mas não localizamos seu usuário no diretório do Entra ID."
+            : embutido
+              ? "O portal só exibe conteúdo para um usuário identificado."
+              : "Entre com sua conta corporativa TrustSis para acessar o portal."}
         </p>
 
         {redirecting ? (
           <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Spinner className="size-4" />
-            Redirecionando para o login…
+            Entrando com a conta do navegador…
           </div>
         ) : (
           <p className="mt-6 text-xs text-muted-foreground">
-            {embutido
-              ? "A autenticação da Microsoft não funciona dentro de um quadro embutido. Abra o portal em uma aba própria para entrar."
-              : "Não foi redirecionado automaticamente? Clique abaixo."}
+            {tokenSemDiretorio
+              ? "Entrar de novo não resolve: quem precisa de ajuste é o cadastro no diretório (ou a leitura do Microsoft Graph pelo portal). Avise o administrador — e tente com outra conta se você tiver mais de uma."
+              : embutido
+                ? "A autenticação da Microsoft não funciona dentro de um quadro embutido. Abra o portal em uma aba própria para entrar com sua conta — ou defina a identidade do preview em Administração › Integração."
+                : ssoLigado
+                  ? "Não foi redirecionado automaticamente? Clique abaixo."
+                  : "Não foi possível confirmar sua identidade agora. Recarregue a página e, se persistir, avise o administrador do portal."}
           </p>
         )}
 
-        <Button onClick={entrar} disabled={redirecting && !embutido} className="mt-4 w-full" size="lg">
-          {embutido ? "Abrir o portal em nova aba" : "Entrar com a conta Microsoft"}
+        <Button
+          onClick={() => (tokenSemDiretorio ? window.location.reload() : entrar())}
+          disabled={redirecting && !embutido}
+          className="mt-4 w-full"
+          size="lg"
+        >
+          {tokenSemDiretorio
+            ? "Tentar de novo"
+            : embutido
+              ? "Abrir o portal em nova aba"
+              : "Entrar com a conta Microsoft"}
         </Button>
+
+        {/* O fluxo normal entra com a conta JÁ autenticada no navegador (Edge). Quem tem mais
+            de uma conta corporativa precisa de um caminho explícito para escolher a outra. */}
+        {!embutido && ssoLigado && (
+          <button
+            type="button"
+            onClick={() => entrar(true)}
+            className="mx-auto mt-3 block text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Entrar com outra conta
+          </button>
+        )}
+
+        {/* Diagnóstico do preview: o backend diz POR QUE não identificou ninguém. */}
+        {embutido && me?.origem === "nenhuma" && (
+          <p className="mt-4 rounded-lg border border-border bg-secondary/40 p-3 text-left text-[11px] leading-snug text-muted-foreground">
+            Nenhuma identidade do preview está configurada. Em Administração › Integração,
+            informe o UPN (e-mail corporativo) que o portal deve assumir quando roda embutido.
+          </p>
+        )}
 
         {erro && (
           <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-left">

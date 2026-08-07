@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import { authAtivo, login, temSessao } from "@/lib/auth";
+import { authAtivo, emIframe, login, temSessao, trocarConta } from "@/lib/auth";
 import type { Acao, Me } from "@/lib/types";
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { DEFAULT_COLOR_THEME, applyColorTheme } from "@/lib/themes";
@@ -20,6 +20,8 @@ interface PortalState {
    *  no fluxo de redirect a página navega para fora antes de o valor ser lido. Rejeita
    *  quando o popup é bloqueado/cancelado — o gate mostra o erro. */
   login: () => Promise<boolean>;
+  /** SSO forçando o seletor de contas do Entra ("entrar com outra conta"). */
+  trocarConta: () => Promise<boolean>;
   isAdmin: boolean; // papel efetivo (respeita "ver como usuário")
   // RBAC (perfis de acesso do portal): o backend resolve o acesso EFETIVO do usuário
   // (grupos do Entra → perfis → união das permissões) e o front usa para USABILIDADE —
@@ -101,6 +103,12 @@ export function PortalProvider({ children }: { children: ReactNode }) {
 
   const toggleTheme = useCallback(() => setTheme((t) => (t === "dark" ? "light" : "dark")), []);
 
+  // Envelopados de propósito: `login` aceita um argumento opcional (`trocar`) e passar a
+  // função direto num onClick faria o evento de clique virar esse argumento (truthy) —
+  // forçando o seletor de contas sem ninguém pedir.
+  const entrar = useCallback(() => login(), []);
+  const trocar = useCallback(() => trocarConta(), []);
+
   const isAdmin = Boolean(me?.isAdmin) && !verComoUsuario;
   const acesso = me?.acesso;
   const perfis = useMemo(() => acesso?.perfis ?? [], [acesso]);
@@ -126,21 +134,30 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     },
     [acesso, paginas],
   );
-  // Com SSO ligado, o acesso ao portal EXIGE sessão: sem conta autenticada (ou sem `me`,
-  // quando a barreira do backend devolve 401) mostramos o gate em vez dos dados de demo.
+  // VALIDAÇÃO DE IDENTIDADE ANTES DE EXIBIR CONTEÚDO. A página inicial do portal é a HOME
+  // (não existe tela de login como porta de entrada), mas ela só aparece se houver um usuário
+  // identificado. São dois critérios, um por contexto:
   //
-  // Por que checar `temSessao()` e não só `me`: com a barreira do backend DESLIGADA — o caso
-  // do preview do Hive — o `/api/me` responde 200 com o usuário de demonstração mesmo sem
-  // login. Olhar só para `me` fazia o portal "abrir sozinho" como o DEMO_USER_UPN e nunca
-  // pedir o SSO. Agora o critério é a sessão do Entra de verdade.
+  //  1) BACKEND (vale sempre): `/api/me` devolve `autenticado: false` quando não conseguiu
+  //     resolver ninguém de verdade no diretório — sem token e sem a identidade sancionada em
+  //     Administração › Integração. Nesse caso NÃO mostramos dados fictícios: mostramos o gate.
+  //     (Com o Entra nem configurado o backend responde `origem: "demo"` e `autenticado: true`
+  //     — senão uma instalação nova ficaria trancada fora da própria tela de configuração.)
+  //
+  //  2) ABA PRÓPRIA + SSO ligado: exigimos também a sessão MSAL (`temSessao()`), porque é ali
+  //     que o login é possível — é o caminho do Edge/SSO. Dentro do iframe do preview esse
+  //     critério é inaplicável (a Microsoft recusa autenticar embutida), então lá vale só o
+  //     veredito do backend.
   //
   // authAtivo() é resolvido em RUNTIME (o main.tsx aguarda initAuth antes de renderizar),
   // porque a configuração de SSO agora vem do backend e não do build.
-  const needsLogin = authAtivo() && !loading && (!me || !temSessao());
+  const identidadeConfirmada = me?.autenticado !== false; // backend antigo (sem o campo) = ok
+  const semSessaoNaAba = authAtivo() && !emIframe() && !temSessao();
+  const needsLogin = !loading && (!me || !identidadeConfirmada || semSessaoNaAba);
 
   return (
     <Ctx.Provider
-      value={{ me, loading, mode, needsLogin, login, isAdmin, perfis, paginas, pode, podeVerPagina, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
+      value={{ me, loading, mode, needsLogin, login: entrar, trocarConta: trocar, isAdmin, perfis, paginas, pode, podeVerPagina, verComoUsuario, setVerComoUsuario, theme, toggleTheme, background, setBackground, colorTheme, setColorTheme }}
     >
       {children}
     </Ctx.Provider>
