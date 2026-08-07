@@ -111,8 +111,13 @@ export default function AppLayout() {
       {bg.id !== "none" && (
         <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
           <div className="absolute inset-0" style={bg.style} />
-          {/* Overlay leve: escurece só o suficiente pra legibilidade, deixando a paisagem aparecer. */}
-          <div className="absolute inset-0 bg-gradient-to-b from-background/45 via-background/55 to-background/80" />
+          {/* Overlay leve: escurece só o suficiente pra legibilidade, deixando a paisagem aparecer.
+              Cor sólida usa um véu uniforme e mais fraco — a cor escolhida precisa aparecer. */}
+          {bg.overlay === "suave" ? (
+            <div className="absolute inset-0 bg-background/45" />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-b from-background/45 via-background/55 to-background/80" />
+          )}
         </div>
       )}
 
