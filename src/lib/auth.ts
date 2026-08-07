@@ -136,6 +136,16 @@ export function emIframe(): boolean {
 let pca: PublicClientApplication | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Último idToken CONHECIDO do usuário — capturado do retorno do redirect (handleRedirectPromise)
+// ou de um acquireTokenSilent bem-sucedido. Existe por UM motivo central: o getAuthToken NUNCA
+// mais dispara um redirect por conta própria. Logo depois do SSO, o primeiro acquireTokenSilent
+// às vezes falha (o iframe oculto de renovação não consegue reaproveitar a sessão) — e o código
+// antigo, nesse caso, chamava acquireTokenRedirect JÁ DENTRO da 1ª chamada /api/me, navegando
+// para o Entra antes mesmo de o portal renderizar. Voltava com token, o silent falhava de novo,
+// redirecionava de novo → LOOP (o "vai pra home e volta pro SSO" relatado). Agora, quando o
+// silent falha, devolvemos ESTE idToken (recém-obtido no login) e o portal abre normal.
+let ultimoIdToken: string | null = null;
+
 function instance(): PublicClientApplication {
   if (!pca) {
     pca = new PublicClientApplication({
@@ -274,6 +284,9 @@ export async function initAuth(): Promise<void> {
       let acct: AccountInfo | null;
       try {
         const res = await app.handleRedirectPromise();
+        // Guarda o idToken recém-emitido: é ele que o getAuthToken usa se o silent falhar,
+        // para a 1ª chamada /api/me logo após o SSO funcionar sem redirecionar de novo.
+        if (res?.idToken) ultimoIdToken = res.idToken;
         const doRedirect = isAllowedTenant(res?.account) ? res!.account : null;
         // Login novo concluído agora: zera a trava de loop (a contagem anterior era de uma
         // sessão que já morreu).
@@ -320,37 +333,28 @@ export async function getAuthToken(): Promise<string | null> {
   if (emIframe()) return null; // preview: identidade vem do backend, não de token
   const app = instance();
   const account = activeAccount();
-  // Sem conta aqui = initAuth já disparou o redirect (ou o guardou). Não bloqueia a UI.
-  if (!account) return null;
+  // Sem conta aqui = initAuth já disparou (ou guardou) o redirect ÚNICO de entrada. Não
+  // bloqueia a UI; devolve o último idToken conhecido se houver.
+  if (!account) return ultimoIdToken;
   try {
     const result: AuthenticationResult = await app.acquireTokenSilent({
       scopes: LOGIN_SCOPES,
       account,
     });
     limparFalhasDeToken();
-    return result.idToken ?? null;
+    if (result.idToken) ultimoIdToken = result.idToken;
+    return result.idToken ?? ultimoIdToken;
   } catch {
-    // QUALQUER falha do silent (token expirado, iframe de renovação bloqueado por
-    // cookie de terceiro / block_iframe_reload, etc.) → reautenticar por redirect
-    // ÚNICO. Nunca condicionar a `instanceof InteractionRequiredAuthError`: no
-    // fluxo silent-first o erro real quase nunca é esse tipo exato.
-    // Embutido (preview): não há redirect possível — devolve null e o gate reaparece
-    // para o usuário reautenticar por popup (com gesto).
-    if (emIframe()) return null;
-    // Falhou de novo e de novo? Não redireciona mais — senão o portal fica em ping-pong com
-    // a tela de seleção de conta da Microsoft (ver TRAVA DE LOOP acima).
-    if (registrarFalhaDeToken() > MAX_FALHAS_SILENT) return null;
-    if (!redirectInFlight()) {
-      clearStaleInteraction();
-      markRedirect();
-      try {
-        await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account });
-      } catch {
-        clearStaleInteraction();
-        await app.acquireTokenRedirect({ scopes: LOGIN_SCOPES, account }).catch(() => {});
-      }
-    }
-    return null; // navega para fora; retorno não chega a ser usado
+    // O getAuthToken NUNCA redireciona. Antes, uma falha do silent (comum logo após o SSO,
+    // quando o iframe oculto de renovação não reaproveita a sessão) disparava
+    // acquireTokenRedirect DENTRO da 1ª chamada /api/me → navegava pro Entra, voltava, o
+    // silent falhava de novo, redirecionava de novo → LOOP infinito ("vai pra home e volta
+    // pro SSO"). Agora devolvemos o idToken recém-obtido no login (ultimoIdToken): a chamada
+    // logo após o SSO funciona e o portal abre. Se esse token já expirou (sessão longa), o
+    // backend recusa e o portal mostra o gate com botão manual — sem ping-pong com a
+    // Microsoft. Um novo redirect só parte do initAuth (entrada a frio) ou de gesto do
+    // usuário (login()).
+    return ultimoIdToken;
   }
 }
 
