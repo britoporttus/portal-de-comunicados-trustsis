@@ -6,16 +6,17 @@ import { usePortal } from "@/context/PortalProvider";
 import { emIframe } from "@/lib/auth";
 
 // Gate de acesso do portal: enquanto não há sessão do Entra, o portal NÃO exibe dados de
-// demonstração — mostra esta tela, que leva ao SSO corporativo. Dois comportamentos:
+// demonstração — mostra esta tela, que leva ao SSO corporativo.
 //
 //  - ABA PRÓPRIA (produção): o initAuth já tentou o redirect automático; esta tela dispara
 //    de novo ao montar e, se ainda assim nada navegar (política do navegador, estado preso
 //    do Edge que restaura abas), oferece o botão manual.
 //
-//  - EMBUTIDO em iframe (preview do Hive): redirect é impossível (o Entra recusa ser
-//    embutido), e popup automático é bloqueado pelo navegador. Então NÃO tentamos nada
-//    sozinhos: um clique abre o SELETOR DE CONTAS do Entra em popup. Feito o login, a conta
-//    fica no localStorage e as próximas cargas entram diretas, sem passar por aqui.
+//  - EMBUTIDO em iframe (preview do Hive): normalmente esta tela NEM APARECE — lá o portal
+//    abre direto na home e a identificação é por seleção de usuário do Entra (ver
+//    lib/identidade.ts + IdentidadePicker). Só chega aqui se a BARREIRA do backend estiver
+//    ligada, e nesse caso o único caminho é abrir o portal em aba própria: dentro de um
+//    iframe o Entra recusa autenticar (nem redirect, nem popup).
 export default function AuthGate() {
   const { login } = usePortal();
   const embutido = emIframe();
@@ -24,14 +25,16 @@ export default function AuthGate() {
   const kicked = useRef(false);
 
   async function entrar() {
+    // Embutido: nada de popup — abre o portal numa aba de verdade, onde o SSO funciona.
+    if (embutido) {
+      window.open(window.location.href, "_blank", "noopener");
+      return;
+    }
     setErro(null);
     setRedirecting(true);
     try {
       const ok = await login();
-      // Popup concluído nesta mesma página: recarrega para o portal subir já autenticado
-      // (o /api/me passa a ir com o Bearer do usuário real).
-      if (ok && embutido) window.location.reload();
-      else if (!ok) setRedirecting(false);
+      if (!ok) setRedirecting(false);
     } catch (e) {
       setRedirecting(false);
       setErro(mensagemDeErro(e));
@@ -64,18 +67,18 @@ export default function AuthGate() {
         {redirecting ? (
           <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Spinner className="size-4" />
-            {embutido ? "Aguardando o login…" : "Redirecionando para o login…"}
+            Redirecionando para o login…
           </div>
         ) : (
           <p className="mt-6 text-xs text-muted-foreground">
             {embutido
-              ? "Uma janela da Microsoft vai abrir para você escolher a conta."
+              ? "A autenticação da Microsoft não funciona dentro de um quadro embutido. Abra o portal em uma aba própria para entrar."
               : "Não foi redirecionado automaticamente? Clique abaixo."}
           </p>
         )}
 
-        <Button onClick={entrar} disabled={redirecting} className="mt-4 w-full" size="lg">
-          Entrar com a conta Microsoft
+        <Button onClick={entrar} disabled={redirecting && !embutido} className="mt-4 w-full" size="lg">
+          {embutido ? "Abrir o portal em nova aba" : "Entrar com a conta Microsoft"}
         </Button>
 
         {erro && (

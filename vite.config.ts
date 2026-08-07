@@ -11,17 +11,6 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
-  build: {
-    rollupOptions: {
-      input: {
-        // App.
-        main: path.resolve(import.meta.dirname, "index.html"),
-        // Página de relay do popup de login (ver src/msalRelay.ts): precisa existir como
-        // documento próprio no dist para o MSAL abri-la em `auth.popupRelayUri`.
-        "msal-relay": path.resolve(import.meta.dirname, "msal-relay.html"),
-      },
-    },
-  },
   server: {
     host: true,
     proxy: {

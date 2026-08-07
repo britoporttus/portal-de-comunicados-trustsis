@@ -17,6 +17,8 @@ import { Brand } from "./shared";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ThemePicker } from "./ThemePicker";
 import { PontosBadge } from "./PontosBadge";
+import IdentidadePicker from "./IdentidadePicker";
+import { modoPreview } from "@/lib/identidade";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
@@ -168,26 +170,34 @@ export default function AppLayout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Alternar tema">
               {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
             </Button>
-            <a
-              href={MYACCOUNT_URL}
-              target="_blank"
-              rel="noreferrer"
-              title="Minha conta Microsoft"
-              className="flex items-center gap-2.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:border-primary/40 hover:bg-secondary"
-            >
-              <Avatar className="size-8">
-                {me?.fotoUrl && <AvatarImage src={me.fotoUrl} alt={me.nome} />}
-                <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
-                  {me ? iniciais(me.nome) : "··"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-left leading-tight sm:block">
-                <div className="text-xs font-semibold text-foreground">{me?.nome ?? "Colaborador"}</div>
-                <div className="max-w-[160px] truncate text-[10px] text-muted-foreground">
-                  {me?.cargo ?? "Colaborador"}
+            {/* Embutido (preview): o bloco do usuário vira SELETOR de identidade — é assim que
+                quem está no preview "entra" como uma pessoa real do Entra, já que o login
+                interativo é impossível dentro de um iframe. Em aba própria (produção), segue
+                sendo o atalho para a conta Microsoft do usuário autenticado. */}
+            {modoPreview() ? (
+              <IdentidadePicker />
+            ) : (
+              <a
+                href={MYACCOUNT_URL}
+                target="_blank"
+                rel="noreferrer"
+                title="Minha conta Microsoft"
+                className="flex items-center gap-2.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:border-primary/40 hover:bg-secondary"
+              >
+                <Avatar className="size-8">
+                  {me?.fotoUrl && <AvatarImage src={me.fotoUrl} alt={me.nome} />}
+                  <AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">
+                    {me ? iniciais(me.nome) : "··"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden text-left leading-tight sm:block">
+                  <div className="text-xs font-semibold text-foreground">{me?.nome ?? "Colaborador"}</div>
+                  <div className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                    {me?.cargo ?? "Colaborador"}
+                  </div>
                 </div>
-              </div>
-            </a>
+              </a>
+            )}
           </div>
         </header>
 

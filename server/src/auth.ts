@@ -45,6 +45,9 @@ aoMudarIntegracao(() => {
   jwksCache = null;
 });
 
+/** Cabeçalho de IDENTIFICAÇÃO do modo preview (só honrado com a barreira desligada). */
+export const HEADER_IDENTIDADE = "x-portal-upn";
+
 export interface TokenIdentity {
   oid?: string;
   upn?: string;
@@ -96,7 +99,29 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(401).json({ error: "não autenticado" });
       return;
     }
-    return next(); // preview/demo/sem SSO configurado: segue sem identidade
+    // MODO PREVIEW (barreira DESLIGADA). O portal roda embutido num iframe (preview do Hive),
+    // onde o login interativo do Entra é impossível — o Entra recusa ser embutido e popup é
+    // uma péssima experiência. Nesse cenário a identidade vem do cabeçalho abaixo, que o front
+    // preenche com o UPN ESCOLHIDO na lista de usuários REAIS do diretório do Entra
+    // (GET /api/identidades, alimentada pelo Graph app-only com as credenciais da tela de
+    // Administração). Ou seja: não é "login", é IDENTIFICAÇÃO — o portal abre direto e o
+    // usuário do preview diz quem é, e daí valem os grupos/perfis/RBAC reais dele.
+    //
+    // SEGURANÇA: este caminho só existe com a barreira desligada. Ligada (produção), o
+    // cabeçalho é IGNORADO por completo — lá só o token do Entra identifica alguém.
+    const escolhido = String(req.headers[HEADER_IDENTIDADE] ?? "")
+      .toLowerCase()
+      .trim();
+    if (escolhido) {
+      let key = escolhido;
+      try {
+        key = await resolveDirectoryKey({ upn: escolhido, email: escolhido });
+      } catch {
+        /* Graph indisponível: usa o UPN cru mesmo */
+      }
+      (req.query as Record<string, unknown>).upn = key;
+    }
+    return next(); // sem escolha: segue como antes (DEMO_USER_UPN)
   }
 
   try {

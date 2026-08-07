@@ -5,7 +5,8 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn, listGroups } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, isGraphOn, listGroups, fetchDiretorioLive } from "./graph.js";
+import { mockPeople } from "./mock.js";
 import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeVer, requerPerm,
 } from "./perfis.js";
@@ -47,6 +48,36 @@ app.get("/api/config/auth", (_req, res) => {
     // Com a barreira ativa, o front NÃO pode cair em modo demo: exige login.
     authRequired: c.barreiraAtiva,
   });
+});
+
+// ---------- identidades do preview (público, ANTES da barreira) ----------
+// Lista os usuários REAIS do diretório do Entra (Graph app-only, credenciais da tela de
+// Administração) para o portal embutido no preview poder IDENTIFICAR quem está usando —
+// sem login interativo, que é impossível dentro de um iframe.
+// Só existe com a barreira DESLIGADA: em produção quem identifica é o token do Entra.
+app.get("/api/identidades", async (_req, res) => {
+  if (authRequired()) {
+    res.status(403).json({ error: "indisponível: a barreira de autenticação está ativa" });
+    return;
+  }
+  try {
+    const pessoas =
+      getCachedDiretorio() ?? (graphEnabled ? await fetchDiretorioLive() : mockPeople);
+    res.json(
+      pessoas
+        .filter((p) => p.email)
+        .map((p) => ({
+          nome: p.nome,
+          email: p.email,
+          cargo: p.cargo,
+          area: p.area,
+          fotoUrl: p.fotoUrl,
+        }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
+    );
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 // Barreira de identidade: protege TODAS as rotas /api abaixo (no-op quando desligada).

@@ -117,8 +117,13 @@ function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
 
 /** O portal está EMBUTIDO num iframe? (é o caso do preview do Hive, que renderiza o app
  *  dentro do painel.) Isso muda tudo no login: `login.microsoftonline.com` recusa ser
- *  carregado em iframe (X-Frame-Options), então um `loginRedirect` daqui apenas mataria o
- *  frame — o caminho viável é POPUP, que abre uma janela top-level de verdade. */
+ *  carregado em iframe (X-Frame-Options), então NENHUM fluxo interativo da MSAL funciona
+ *  aqui — nem redirect (mataria o frame) nem popup (a resposta não volta pelo armazenamento
+ *  particionado do iframe, além de ser uma experiência ruim).
+ *
+ *  Por isso, EMBUTIDO o MSAL fica totalmente INERTE e o portal usa IDENTIFICAÇÃO por
+ *  seleção: o backend lista os usuários reais do Entra (Graph app-only, credenciais da tela
+ *  de Administração) e o usuário do preview escolhe quem é. Ver src/lib/identidade.ts. */
 export function emIframe(): boolean {
   try {
     return window.self !== window.top;
@@ -138,13 +143,6 @@ function instance(): PublicClientApplication {
         authority: `https://login.microsoftonline.com/${tenantAtual()}`,
         redirectUri: window.location.origin,
         postLogoutRedirectUri: window.location.origin,
-        // EMBUTIDO EM IFRAME (preview do Hive): o navegador PARTICIONA o armazenamento do
-        // iframe, então o BroadcastChannel que o popup do Entra usa para devolver a resposta
-        // nunca chega até aqui — o login concluía na janela da Microsoft e o portal ficava
-        // preso em "Aguardando o login…". Esta página de relay (mesma origem, aberta como
-        // janela TOP-LEVEL) recebe a resposta e a repassa por postMessage. Não é redirectUri:
-        // não precisa de cadastro no Azure. Ver src/msalRelay.ts.
-        popupRelayUri: "/msal-relay.html",
       },
       cache: { cacheLocation: "localStorage" },
     });
@@ -253,6 +251,10 @@ export async function initAuth(): Promise<void> {
   // Descobre COMO autenticar antes de qualquer coisa (rota pública do backend).
   await carregarConfigAuth();
   if (!authAtivo()) return;
+  // EMBUTIDO (preview do Hive): MSAL inerte — nenhum redirect, nenhum popup, nenhum iframe
+  // de renovação. A identidade vem da seleção de usuário (src/lib/identidade.ts) e o portal
+  // abre DIRETO na home, como antes.
+  if (emIframe()) return;
   if (!initPromise) {
     initPromise = (async () => {
       const app = instance();
@@ -279,14 +281,7 @@ export async function initAuth(): Promise<void> {
         return;
       }
 
-      // 2a) EMBUTIDO (preview do Hive): redirect é impossível dentro do iframe — o Entra
-      //     recusa ser embutido e o frame morreria numa tela em branco. Aqui paramos: o
-      //     `AuthGate` assume e abre o SELETOR DE CONTAS do Entra em POPUP, no gesto do
-      //     usuário (navegador bloqueia popup automático). Depois do 1º login a conta fica
-      //     no localStorage e as próximas cargas caem no passo (1) — entram diretas.
-      if (emIframe()) return;
-
-      // 2b) Sem conta utilizável → login interativo por redirect (uma vez por aba).
+      // 2) Sem conta utilizável → login interativo por redirect (uma vez por aba).
       //    `prompt: "select_account"` força o Entra a MOSTRAR o seletor de contas em
       //    vez de reusar silenciosamente a sessão do outro tenant já ativa no navegador
       //    — assim o usuário escolhe a conta TrustSis explicitamente.
@@ -313,6 +308,7 @@ function activeAccount(): AccountInfo | null {
 export async function getAuthToken(): Promise<string | null> {
   await initAuth();
   if (!authAtivo()) return null;
+  if (emIframe()) return null; // preview: identidade por seleção, não por token
   const app = instance();
   const account = activeAccount();
   // Sem conta aqui = initAuth já disparou o redirect (ou o guardou). Não bloqueia a UI.
@@ -355,29 +351,16 @@ export async function getAuthToken(): Promise<string | null> {
  *  antes de navegar, então é o caminho à prova de estado-local-corrompido (o cenário do
  *  Edge que restaura abas). No-op quando o SSO não está configurado.
  *
- *  Dois caminhos, escolhidos pelo contexto de execução:
- *   - EMBUTIDO (preview do Hive, app dentro de iframe) → `loginPopup`: abre a janela do
- *     Entra por cima, o usuário escolhe a conta, e a resposta volta pela redirect bridge
- *     (ver lib/authBridge.ts). Resolve `true` = sessão estabelecida nesta mesma página.
- *   - ABA PRÓPRIA (produção) → `loginRedirect`, o fluxo já validado em produção. Nesse
- *     caso a função navega para fora e o `true` nunca chega a ser lido.
- *
- *  Lança quando o popup é bloqueado/cancelado — o gate mostra a mensagem. */
+ *  Só existe em ABA PRÓPRIA (produção), via `loginRedirect` — a função navega para fora e o
+ *  `true` nunca chega a ser lido. EMBUTIDO (preview) não há login interativo possível: é
+ *  no-op, e a identificação acontece pelo seletor de usuário (lib/identidade.ts). */
 export async function login(): Promise<boolean> {
   await carregarConfigAuth();
-  if (!authAtivo()) return false;
+  if (!authAtivo() || emIframe()) return false;
   const app = instance();
   await app.initialize();
   clearStaleInteraction();
   limparFalhasDeToken(); // gesto explícito do usuário: recomeça do zero
-
-  if (emIframe()) {
-    const res = await app.loginPopup({ scopes: LOGIN_SCOPES, prompt: "select_account" });
-    const conta = res?.account ?? accountsForTenant(app)[0] ?? null;
-    if (!conta) return false;
-    app.setActiveAccount(conta);
-    return true;
-  }
 
   markRedirect();
   await robustLoginRedirect(app);
@@ -400,6 +383,9 @@ export function getAccount(): AccountInfo | null {
  *  configurado devolve `true` — nesse cenário não existe login a exigir (modo demo). */
 export function temSessao(): boolean {
   if (!authAtivo()) return true;
+  // EMBUTIDO (preview): não existe sessão MSAL a exigir — o portal abre direto e a
+  // identidade é a escolhida no seletor (ou o usuário padrão). Nunca mostra gate.
+  if (emIframe()) return true;
   return Boolean(getAccount());
 }
 
