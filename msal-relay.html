@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Entrar — Portal TrustSis</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #0b0f14;
+        color: #e6edf3;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+      }
+      p {
+        max-width: 34ch;
+        font-size: 14px;
+        line-height: 1.5;
+        opacity: 0.85;
+        margin: 0;
+      }
+      button {
+        display: none;
+        padding: 10px 18px;
+        border: 0;
+        border-radius: 10px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p id="estado">Abrindo o login da Microsoft…</p>
+      <button id="continuar" type="button">Continuar com a Microsoft</button>
+    </main>
+    <script type="module" src="/src/msalRelay.ts"></script>
+  </body>
+</html>

@@ -11,6 +11,18 @@ export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
+  build: {
+    rollupOptions: {
+      input: {
+        // O portal.
+        index: path.resolve(import.meta.dirname, "index.html"),
+        // Página de relay do popup de login (só usada quando o portal roda embutido em iframe;
+        // ver src/msalRelay.ts). É uma SEGUNDA página do build — sem declará-la aqui ela
+        // simplesmente não iria para o dist/ e o login do preview quebraria em produção.
+        "msal-relay": path.resolve(import.meta.dirname, "msal-relay.html"),
+      },
+    },
+  },
   server: {
     host: true,
     proxy: {

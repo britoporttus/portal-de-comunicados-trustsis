@@ -119,15 +119,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(401).json({ error: "não autenticado" });
       return;
     }
-    // SEM TOKEN e sem barreira. O único cenário legítimo é o portal rodando EMBUTIDO num
-    // iframe (preview do Hive), onde o login do Entra é tecnicamente impossível: ele recusa
-    // ser embutido (X-Frame-Options) e a resposta de um popup não volta pelo armazenamento
-    // particionado do iframe.
+    // SEM TOKEN e sem barreira. Note que isto NÃO é mais "o portal está embutido": embutido
+    // no iframe do preview cada pessoa entra com a PRÓPRIA conta, por popup (o Entra recusa
+    // ser embutido, mas a janela do popup é top-level e a resposta volta pela página de
+    // relay — ver src/lib/auth.ts › popupRelayUri). Quando isso acontece, o request chega
+    // AQUI COM Bearer e cai no caminho de baixo, com origem "token".
     //
-    // Aqui a identidade NÃO é escolhida por quem está usando (antes era: um cabeçalho
-    // `x-portal-upn` com qualquer UPN do diretório — ou seja, dava para "entrar" como
-    // qualquer pessoa). Agora ela é ÚNICA e SANCIONADA pelo administrador: o UPN salvo em
-    // Administração › Integração ("identidade do preview" / DEMO_USER_UPN).
+    // Sem token o que resta é o modo DEMONSTRAÇÃO explícito: a identidade ÚNICA e SANCIONADA
+    // pelo administrador em Administração › Integração ("identidade do preview" /
+    // DEMO_USER_UPN). Ela nunca é escolhida por quem está usando (antes era: um cabeçalho
+    // `x-portal-upn` com qualquer UPN do diretório — dava para "entrar" como qualquer pessoa).
+    // Não estando configurada, a origem é "nenhuma" e o portal mostra o gate de login.
     if (!graphEnabled) {
       marcarOrigem(req, "demo"); // Entra não configurado: modo demonstração
       return next();

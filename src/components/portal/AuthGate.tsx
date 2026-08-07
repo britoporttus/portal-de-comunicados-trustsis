@@ -14,10 +14,13 @@ import { authAtivo, emIframe, erroConfigSpa } from "@/lib/auth";
 //    novo ao montar e, se ainda assim nada navegar (política do navegador, estado preso do
 //    Edge que restaura abas), oferece o botão manual + "entrar com outra conta".
 //
-//  - EMBUTIDO em iframe (preview do Hive): a Microsoft recusa autenticar dentro de um quadro
-//    embutido — nem redirect, nem popup. Lá a identidade é a ÚNICA sancionada pelo admin em
-//    Administração › Integração ("identidade do preview"); se ela não estiver configurada,
-//    cai aqui: o caminho é configurá-la ou abrir o portal numa aba de verdade.
+//  - EMBUTIDO em iframe (preview do Hive): cada pessoa entra com a PRÓPRIA conta, por POPUP
+//    (`loginPopup`) — a janela da Microsoft abre top-level, que é o único fluxo interativo
+//    suportado dentro de um frame. Exige gesto do usuário, então aqui NUNCA disparamos login
+//    automático: quem começa é o clique no botão. Se o navegador bloquear o pop-up (ou o
+//    usuário fechar a janela), aí sim cai no plano B: abrir o portal numa aba própria.
+//    A identidade do preview (`DEMO_USER_UPN`) continua existindo como modo demonstração,
+//    mas deixou de ser pré-requisito para usar o preview.
 export default function AuthGate() {
   const { login, trocarConta, me } = usePortal();
   const embutido = emIframe();
@@ -31,38 +34,53 @@ export default function AuthGate() {
   // registrada como "Single-page application" no App Registration. Reautenticar só recria o
   // loop, então a tela para de empurrar login e diz EXATAMENTE o que ajustar no Entra.
   const configSpa = !embutido && ssoLigado && erroConfigSpa();
-  const podeTentarLogin = !embutido && ssoLigado && !tokenSemDiretorio && !configSpa;
+  // O login é possível nos DOIS contextos (redirect na aba, popup no iframe) — o que muda é
+  // quem o dispara: na aba, automaticamente ao montar; no iframe, só o clique do usuário.
+  const podeTentarLogin = ssoLigado && !tokenSemDiretorio && !configSpa;
+  const autoLogin = podeTentarLogin && !embutido;
   // Sem SSO configurado não há login a disparar: a tela é informativa (ex.: backend fora do ar).
-  const [redirecting, setRedirecting] = useState(podeTentarLogin);
+  const [redirecting, setRedirecting] = useState(autoLogin);
   const [erro, setErro] = useState<string | null>(null);
+  // Plano B do preview: o pop-up foi bloqueado/fechado. Só então oferecemos a nova aba —
+  // antes disso ela seria um desvio desnecessário do fluxo que funciona no próprio quadro.
+  const [precisaNovaAba, setPrecisaNovaAba] = useState(false);
   const kicked = useRef(false);
 
+  function abrirEmNovaAba() {
+    // Sem `noopener` seria a MSAL quem precisaria da referência; aqui é só uma aba do portal.
+    window.open(window.location.href, "_blank", "noopener");
+  }
+
   async function entrar(trocar = false) {
-    // Embutido: nada de popup — abre o portal numa aba de verdade, onde o SSO funciona.
-    if (embutido) {
-      window.open(window.location.href, "_blank", "noopener");
+    if (!podeTentarLogin) {
+      abrirEmNovaAba();
       return;
     }
     setErro(null);
     setRedirecting(true);
     try {
+      // Embutido → `login()` faz `loginPopup` (ver src/lib/auth.ts) e resolve `true` com a
+      // sessão já estabelecida NESTA página; o PortalProvider relê o /api/me em seguida, e o
+      // portal aparece com o nome do usuário sem F5. Em aba própria a página navega para fora.
       const ok = await (trocar ? trocarConta() : login());
       if (!ok) setRedirecting(false);
     } catch (e) {
       setRedirecting(false);
       setErro(mensagemDeErro(e));
+      if (embutido) setPrecisaNovaAba(true);
     }
   }
 
   // Em aba própria, empurra o SSO automaticamente UMA vez ao montar (o auto-redirect do
-  // initAuth pode não ter navegado). Embutido, nunca: não há fluxo interativo possível.
+  // initAuth pode não ter navegado). Embutido, nunca: pop-up sem gesto do usuário é bloqueado
+  // pelo navegador — e a chance seria queimada em silêncio.
   useEffect(() => {
-    if (!podeTentarLogin || kicked.current) return;
+    if (!autoLogin || kicked.current) return;
     kicked.current = true;
     login().catch(() => setErro(null));
     const t = setTimeout(() => setRedirecting(false), 2500);
     return () => clearTimeout(t);
-  }, [login, podeTentarLogin]);
+  }, [login, autoLogin]);
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background px-4">
@@ -78,15 +96,13 @@ export default function AuthGate() {
             ? "Sua conta foi autenticada, mas o portal não conseguiu concluir o login neste endereço."
             : tokenSemDiretorio
               ? "Sua conta foi autenticada, mas não localizamos seu usuário no diretório do Entra ID."
-              : embutido
-                ? "O portal só exibe conteúdo para um usuário identificado."
-                : "Entre com sua conta corporativa TrustSis para acessar o portal."}
+              : "Entre com sua conta corporativa TrustSis para acessar o portal."}
         </p>
 
         {redirecting ? (
           <div className="mt-6 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Spinner className="size-4" />
-            Entrando com a conta do navegador…
+            {embutido ? "Conclua o login na janela da Microsoft…" : "Entrando com a conta do navegador…"}
           </div>
         ) : (
           <p className="mt-6 text-xs text-muted-foreground">
@@ -94,30 +110,39 @@ export default function AuthGate() {
               ? "Entrar de novo não resolve enquanto o registro do aplicativo no Entra ID não for ajustado. Avise o administrador com o endereço abaixo."
               : tokenSemDiretorio
               ? "Entrar de novo não resolve: quem precisa de ajuste é o cadastro no diretório (ou a leitura do Microsoft Graph pelo portal). Avise o administrador — e tente com outra conta se você tiver mais de uma."
-              : embutido
-                ? "A autenticação da Microsoft não funciona dentro de um quadro embutido. Abra o portal em uma aba própria para entrar com sua conta — ou defina a identidade do preview em Administração › Integração."
-                : ssoLigado
-                  ? "Não foi redirecionado automaticamente? Clique abaixo."
-                  : "Não foi possível confirmar sua identidade agora. Recarregue a página e, se persistir, avise o administrador do portal."}
+              : !ssoLigado
+                ? "Não foi possível confirmar sua identidade agora. Recarregue a página e, se persistir, avise o administrador do portal."
+                : precisaNovaAba
+                  ? "O navegador impediu a janela de login aqui dentro. Abra o portal em uma aba própria para concluir a entrada."
+                  : embutido
+                    ? "Uma janela da Microsoft vai abrir para você entrar com sua conta."
+                    : "Não foi redirecionado automaticamente? Clique abaixo."}
           </p>
         )}
 
         <Button
-          onClick={() => (tokenSemDiretorio ? window.location.reload() : entrar())}
-          disabled={redirecting && !embutido}
+          onClick={() =>
+            tokenSemDiretorio
+              ? window.location.reload()
+              : precisaNovaAba
+                ? abrirEmNovaAba()
+                : entrar()
+          }
+          disabled={redirecting}
           className="mt-4 w-full"
           size="lg"
         >
           {tokenSemDiretorio
             ? "Tentar de novo"
-            : embutido
+            : precisaNovaAba
               ? "Abrir o portal em nova aba"
               : "Entrar com a conta Microsoft"}
         </Button>
 
         {/* O fluxo normal entra com a conta JÁ autenticada no navegador (Edge). Quem tem mais
-            de uma conta corporativa precisa de um caminho explícito para escolher a outra. */}
-        {!embutido && ssoLigado && (
+            de uma conta corporativa precisa de um caminho explícito para escolher a outra.
+            Vale nos dois contextos: no preview o seletor de contas abre no mesmo popup. */}
+        {podeTentarLogin && !precisaNovaAba && (
           <button
             type="button"
             onClick={() => entrar(true)}
@@ -135,14 +160,6 @@ export default function AuthGate() {
             (não em “Web”), exatamente e sem barra no final:
             <code className="mt-1 block break-all text-foreground">{window.location.origin}</code>
           </div>
-        )}
-
-        {/* Diagnóstico do preview: o backend diz POR QUE não identificou ninguém. */}
-        {embutido && me?.origem === "nenhuma" && (
-          <p className="mt-4 rounded-lg border border-border bg-secondary/40 p-3 text-left text-[11px] leading-snug text-muted-foreground">
-            Nenhuma identidade do preview está configurada. Em Administração › Integração,
-            informe o UPN (e-mail corporativo) que o portal deve assumir quando roda embutido.
-          </p>
         )}
 
         {erro && (

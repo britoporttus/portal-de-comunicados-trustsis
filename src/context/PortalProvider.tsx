@@ -82,6 +82,19 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("ts-color", id);
   }, []);
 
+  // Relê a identidade no backend. No fluxo de REDIRECT isso acontecia de graça (a página
+  // recarrega ao voltar do Entra); no fluxo de POPUP — o do preview embutido — a página nunca
+  // recarrega, então quem estabelece a sessão precisa pedir a releitura explicitamente.
+  const recarregarMe = useCallback(async () => {
+    try {
+      const [m, h] = await Promise.all([api.me(), api.health()]);
+      setMe(m);
+      setMode(h.mode);
+    } catch {
+      /* backend indisponível — segue com o que já temos */
+    }
+  }, []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -106,8 +119,19 @@ export function PortalProvider({ children }: { children: ReactNode }) {
   // Envelopados de propósito: `login` aceita um argumento opcional (`trocar`) e passar a
   // função direto num onClick faria o evento de clique virar esse argumento (truthy) —
   // forçando o seletor de contas sem ninguém pedir.
-  const entrar = useCallback(() => login(), []);
-  const trocar = useCallback(() => trocarConta(), []);
+  //
+  // O `await recarregarMe()` é o "caminho pós-login": no redirect ele nunca roda (a página já
+  // navegou para fora), no popup é ELE que faz o portal aparecer com o nome do usuário sem F5.
+  const entrar = useCallback(async () => {
+    const ok = await login();
+    if (ok) await recarregarMe();
+    return ok;
+  }, [recarregarMe]);
+  const trocar = useCallback(async () => {
+    const ok = await trocarConta();
+    if (ok) await recarregarMe();
+    return ok;
+  }, [recarregarMe]);
 
   const isAdmin = Boolean(me?.isAdmin) && !verComoUsuario;
   const acesso = me?.acesso;

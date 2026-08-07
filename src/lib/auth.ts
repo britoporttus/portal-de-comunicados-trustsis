@@ -116,15 +116,18 @@ function isAllowedTenant(a: AccountInfo | null | undefined): boolean {
 }
 
 /** O portal está EMBUTIDO num iframe? (é o caso do preview do Hive, que renderiza o app
- *  dentro do painel.) Isso muda tudo no login: `login.microsoftonline.com` recusa ser
- *  carregado em iframe (X-Frame-Options), então NENHUM fluxo interativo da MSAL funciona
- *  aqui — nem redirect (mataria o frame) nem popup (a resposta não volta pelo armazenamento
- *  particionado do iframe, além de ser uma experiência ruim).
+ *  dentro do painel.) Isso muda o FLUXO de login — não a possibilidade dele:
  *
- *  Por isso, EMBUTIDO o MSAL fica totalmente INERTE e a identidade é decidida pelo BACKEND:
- *  vale a ÚNICA identidade que o administrador sancionou em Administração › Integração
- *  ("identidade do preview"). Ninguém escolhe quem é pela interface — ver server/src/auth.ts
- *  › requireAuth e o campo `autenticado` do /api/me. */
+ *   - REDIRECT é impossível: `login.microsoftonline.com` recusa ser carregado em iframe
+ *     (X-Frame-Options), e navegar o frame para fora mataria o preview.
+ *   - POPUP é o fluxo suportado: a janela da Microsoft abre TOP-LEVEL, e a resposta volta
+ *     ao frame pela página de relay (ver `popupRelayUri` / src/msalRelay.ts), que existe
+ *     justamente porque o armazenamento do iframe é PARTICIONADO e o BroadcastChannel do
+ *     popup, sozinho, nunca chegaria aqui.
+ *
+ *  Exige GESTO do usuário (clique no botão "Entrar" do gate) — popup sem gesto é bloqueado.
+ *  A identidade do preview sancionada pelo admin (`DEMO_USER_UPN`) continua existindo, mas
+ *  só como modo DEMONSTRAÇÃO explícito: não é mais pré-requisito para usar o preview. */
 export function emIframe(): boolean {
   try {
     return window.self !== window.top;
@@ -154,7 +157,18 @@ function instance(): PublicClientApplication {
         authority: `https://login.microsoftonline.com/${tenantAtual()}`,
         redirectUri: window.location.origin,
         postLogoutRedirectUri: window.location.origin,
+        // EMBUTIDO EM IFRAME (preview do Hive): o navegador PARTICIONA o armazenamento do
+        // frame, então o BroadcastChannel que o popup do Entra usa para devolver a resposta
+        // vive no balde TOP-LEVEL e nunca chega até aqui — o login concluía na janela da
+        // Microsoft e o portal ficava preso em "Aguardando o login…". Esta página de relay
+        // (mesma origem, aberta como janela top-level) recebe a resposta e a repassa por
+        // postMessage. NÃO é redirectUri: nada novo a cadastrar no Entra. Ver src/msalRelay.ts.
+        ...(emIframe()
+          ? { popupRelayUri: `${window.location.origin}/msal-relay.html` }
+          : {}),
       },
+      // localStorage (e não sessionStorage): a sessão precisa sobreviver ao fechamento do
+      // popup e ao reload do iframe do preview.
       cache: { cacheLocation: "localStorage" },
     });
   }
@@ -300,6 +314,17 @@ async function robustLoginRedirect(
   }
 }
 
+/** Inicialização do contexto EMBUTIDO (preview em iframe): apenas prepara a MSAL e readota a
+ *  conta que já esteja no cache (`localStorage`), para que a sessão sobreviva a um reload do
+ *  preview. Nada de redirect (impossível no frame) nem de popup automático (seria bloqueado
+ *  pelo navegador sem gesto) — quem dispara o login é o botão "Entrar" do gate. */
+async function initEmbutido(): Promise<void> {
+  const app = instance();
+  await app.initialize();
+  const acct = accountsForTenant(app)[0] ?? null;
+  if (acct) app.setActiveAccount(acct);
+}
+
 /** Inicializa a MSAL, resolve o retorno de um eventual redirect e GARANTE a sessão:
  *  1) resolve o retorno de um redirect (ou usa a conta em cache), se houver;
  *  2) SEM conta → login por REDIRECT ÚNICO (SSO). Com a sessão do Entra já ativa no
@@ -316,10 +341,13 @@ export async function initAuth(): Promise<void> {
   // Descobre COMO autenticar antes de qualquer coisa (rota pública do backend).
   await carregarConfigAuth();
   if (!authAtivo()) return;
-  // EMBUTIDO (preview do Hive): MSAL inerte — nenhum redirect, nenhum popup, nenhum iframe
-  // de renovação. A identidade vem da seleção de usuário (src/lib/identidade.ts) e o portal
-  // abre DIRETO na home, como antes.
-  if (emIframe()) return;
+  // EMBUTIDO (preview do Hive): a MSAL é inicializada normalmente (para reaproveitar a sessão
+  // salva no localStorage), mas NENHUM fluxo interativo parte daqui — popup exige gesto do
+  // usuário (o botão do AuthGate) e redirect é impossível dentro de um frame.
+  if (emIframe()) {
+    if (!initPromise) initPromise = initEmbutido();
+    return initPromise;
+  }
   if (!initPromise) {
     initPromise = (async () => {
       const app = instance();
@@ -401,13 +429,53 @@ function activeAccount(): AccountInfo | null {
   return accountsForTenant(app)[0] ?? active ?? null;
 }
 
+// Renovação interativa DENTRO do iframe: só por popup (redirect mataria o frame). Fica
+// limitada a UMA tentativa por carga de página e é single-flight — várias chamadas de API
+// simultâneas não podem virar várias janelas. Sem gesto do usuário o navegador bloqueia o
+// popup; nesse caso devolvemos null e o gate assume, com o botão "Entrar".
+let renovacaoEmVoo: Promise<string | null> | null = null;
+let jaTentouPopup = false;
+
+function exigeInteracao(e: unknown): boolean {
+  const codigo = String((e as { errorCode?: string })?.errorCode ?? "");
+  return (
+    codigo.includes("interaction_required") ||
+    codigo.includes("login_required") ||
+    codigo.includes("consent_required") ||
+    codigo.includes("no_account_error") ||
+    codigo.includes("monitor_window_timeout")
+  );
+}
+
+async function renovarComPopup(
+  app: PublicClientApplication,
+  erroDoSilent: unknown,
+): Promise<string | null> {
+  if (!exigeInteracao(erroDoSilent) || jaTentouPopup) return null;
+  jaTentouPopup = true;
+  if (!renovacaoEmVoo) {
+    renovacaoEmVoo = app
+      .acquireTokenPopup({ scopes: LOGIN_SCOPES })
+      .then((r) => {
+        if (r.account) app.setActiveAccount(r.account);
+        if (r.idToken) ultimoIdToken = r.idToken;
+        limparFalhasDeToken();
+        return r.idToken ?? null;
+      })
+      .catch(() => null)
+      .finally(() => {
+        renovacaoEmVoo = null;
+      });
+  }
+  return renovacaoEmVoo;
+}
+
 /** Devolve um idToken válido do usuário logado, de forma SILENCIOSA sempre que possível.
  *  Retorna null quando auth está desligado. Dispara redirect (uma vez) só se a sessão
  *  do Entra não puder ser reaproveitada silenciosamente. */
 export async function getAuthToken(): Promise<string | null> {
   await initAuth();
   if (!authAtivo()) return null;
-  if (emIframe()) return null; // preview: identidade vem do backend, não de token
   const app = instance();
   const account = activeAccount();
   // Sem conta aqui = initAuth já disparou (ou guardou) o redirect ÚNICO de entrada. Não
@@ -421,7 +489,14 @@ export async function getAuthToken(): Promise<string | null> {
     limparFalhasDeToken();
     if (result.idToken) ultimoIdToken = result.idToken;
     return result.idToken ?? ultimoIdToken;
-  } catch {
+  } catch (e) {
+    // EMBUTIDO: nunca redirect (mataria o frame). Se o silent falhou por exigir interação e
+    // ainda não temos token algum, tentamos UMA vez o popup — quando ele for bloqueado (sem
+    // gesto), devolvemos null e o gate reaparece com o botão, que é o caminho honesto.
+    if (emIframe()) {
+      if (ultimoIdToken) return ultimoIdToken;
+      return renovarComPopup(app, e);
+    }
     // O getAuthToken NUNCA redireciona. Antes, uma falha do silent (comum logo após o SSO,
     // quando o iframe oculto de renovação não reaproveita a sessão) disparava
     // acquireTokenRedirect DENTRO da 1ª chamada /api/me → navegava pro Entra, voltava, o
@@ -441,20 +516,36 @@ export async function getAuthToken(): Promise<string | null> {
  *  antes de navegar, então é o caminho à prova de estado-local-corrompido (o cenário do
  *  Edge que restaura abas). No-op quando o SSO não está configurado.
  *
- *  Só existe em ABA PRÓPRIA (produção), via `loginRedirect` — a função navega para fora e o
- *  `true` nunca chega a ser lido. EMBUTIDO (preview) não há login interativo possível: é
- *  no-op, e a identidade é a única sancionada pelo admin (ver server/src/auth.ts).
+ *  Dois fluxos, um por contexto:
+ *   - ABA PRÓPRIA (produção): `loginRedirect` — a função navega para fora e o `true` nunca
+ *     chega a ser lido.
+ *   - EMBUTIDO (preview em iframe): `loginPopup` — a janela da Microsoft abre TOP-LEVEL (o
+ *     Entra recusa ser embutido) e a resposta volta pela página de relay. Aqui o `true` VALE:
+ *     a sessão foi estabelecida NESTA página, e quem chamou deve recarregar o `/api/me` para
+ *     o portal aparecer sem F5. Um popup bloqueado/cancelado LANÇA — o gate mostra o erro e
+ *     oferece a saída "abrir em nova aba".
  *
  *  `trocar` = true força o seletor de contas do Entra (`prompt: select_account`); sem isso o
  *  login segue a conta já autenticada no navegador (SSO do Edge). */
 export async function login(trocar = false): Promise<boolean> {
   await carregarConfigAuth();
-  if (!authAtivo() || emIframe()) return false;
+  if (!authAtivo()) return false;
   const app = instance();
   await app.initialize();
   clearStaleInteraction();
   limparFalhasDeToken(); // gesto explícito do usuário: recomeça do zero
   limparErroConfigSpa(); // pode ter ajustado o registro no Entra: dá outra chance ao SSO
+
+  if (emIframe()) {
+    const res = await app.loginPopup({
+      scopes: LOGIN_SCOPES,
+      ...(trocar ? { prompt: "select_account" as const } : {}),
+    });
+    if (res?.account) app.setActiveAccount(res.account);
+    if (res?.idToken) ultimoIdToken = res.idToken;
+    jaTentouPopup = false; // sessão nova: a renovação interativa pode tentar de novo depois
+    return true;
+  }
 
   markRedirect();
   await robustLoginRedirect(app, trocar ? "select_account" : undefined);
@@ -485,8 +576,9 @@ export function getAccount(): AccountInfo | null {
  *  configurado devolve `true` — nesse cenário não existe login a exigir (modo demo). */
 export function temSessao(): boolean {
   if (!authAtivo()) return true;
-  // EMBUTIDO (preview): não existe sessão MSAL possível aqui. Quem valida a identidade é o
-  // backend (`/api/me › autenticado`), então este critério não se aplica.
+  // EMBUTIDO (preview): pode haver sessão MSAL (login por popup) OU a identidade de
+  // demonstração sancionada pelo admin. Quem dá o veredito é o backend
+  // (`/api/me › autenticado`), então este critério local não se aplica.
   if (emIframe()) return true;
   return Boolean(getAccount());
 }
@@ -495,6 +587,10 @@ export function temSessao(): boolean {
 export async function signOut(): Promise<void> {
   await initAuth();
   if (!authAtivo()) return;
-  await initAuth();
+  // Embutido: logout também é por popup (navegar o frame para o Entra é impossível).
+  if (emIframe()) {
+    await instance().logoutPopup();
+    return;
+  }
   await instance().logoutRedirect();
 }
