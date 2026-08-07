@@ -26,6 +26,17 @@ import { MarcaAdmin } from "@/components/admin/MarcaAdmin";
 import { AtividadePontosAdmin } from "@/components/portal/AtividadePontosAdmin";
 import { ScanStatus } from "@/components/portal/ScanStatus";
 
+/** Abas da administração — declaradas em lista para a barra ficar consistente e fácil de estender. */
+const ABAS = [
+  { value: "perfis", label: "Perfis de acesso", icon: ShieldCheck },
+  { value: "bibliotecas", label: "Bibliotecas", icon: FolderOpen },
+  { value: "atalhos", label: "Atalhos da empresa", icon: LayoutGrid },
+  { value: "marca", label: "Marca", icon: Palette },
+  { value: "integracao", label: "Integração", icon: PlugZap },
+  { value: "atividade", label: "Atividade de pontos", icon: Activity },
+  { value: "diagnostico", label: "Diagnóstico", icon: Stethoscope },
+] as const;
+
 export default function AdminPage() {
   const meses = useMemo(() => ultimosMeses(), []);
   const [mes, setMes] = useState(meses[0]);
@@ -39,28 +50,17 @@ export default function AdminPage() {
       />
 
       <Tabs defaultValue="perfis" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="perfis">
-            <ShieldCheck className="size-4" /> Perfis de acesso
-          </TabsTrigger>
-          <TabsTrigger value="bibliotecas">
-            <FolderOpen className="size-4" /> Bibliotecas
-          </TabsTrigger>
-          <TabsTrigger value="atalhos">
-            <LayoutGrid className="size-4" /> Atalhos da empresa
-          </TabsTrigger>
-          <TabsTrigger value="marca">
-            <Palette className="size-4" /> Marca
-          </TabsTrigger>
-          <TabsTrigger value="integracao">
-            <PlugZap className="size-4" /> Integração
-          </TabsTrigger>
-          <TabsTrigger value="atividade">
-            <Activity className="size-4" /> Atividade de pontos
-          </TabsTrigger>
-          <TabsTrigger value="diagnostico">
-            <Stethoscope className="size-4" /> Diagnóstico
-          </TabsTrigger>
+        {/* Barra de abas: pílula com respiro, quebra em telas estreitas e acento ciano no item ativo. */}
+        <TabsList className="h-auto max-w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/50 p-1.5 group-data-horizontal/tabs:h-auto">
+          {ABAS.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="h-9 flex-none gap-2 rounded-xl px-3.5 text-[13px] text-muted-foreground hover:bg-background/40 data-active:border-border data-active:text-foreground data-active:shadow-sm data-active:[&_svg]:text-primary"
+            >
+              <Icon className="size-4" /> {label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="perfis">
