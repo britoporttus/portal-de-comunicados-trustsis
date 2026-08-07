@@ -123,9 +123,15 @@ export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => vo
   const colapsado = escuro
     ? primeiro(marca?.logoColapsadoEscuro, marca?.logoColapsado)
     : primeiro(marca?.logoColapsado, marca?.logoColapsadoEscuro);
-  const personalizado = collapsed ? colapsado || expandido : expandido || colapsado;
 
-  if (personalizado) {
+  // Marca configurada: preferimos animar entre as variantes quadrada (recolhido) e horizontal
+  // (aberto). Se só existir UMA variante, ela vale para os dois estados (sem cross-fade, mas
+  // ainda com a animação de largura/opacidade).
+  const aberto = expandido || colapsado;
+  const fechado = colapsado || expandido;
+  const temMarca = aberto || fechado;
+
+  if (temMarca) {
     return (
       <Link
         to="/"
@@ -133,13 +139,32 @@ export function Brand({ onNavigate, collapsed = false }: { onNavigate?: () => vo
         aria-label="Página inicial"
         className="flex items-center rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <img
-          src={personalizado}
-          alt="Logo da empresa"
-          // Recolhido: quadrado de 36px (cabe no trilho de 64px do menu). Aberto: altura fixa,
-          // largura livre até o limite que cabe na sidebar de 256px.
-          className={cn("h-9 object-contain", collapsed ? "w-9" : "w-auto max-w-[190px]")}
-        />
+        <span
+          // Container de altura fixa; a LARGURA anima entre o quadrado (recolhido) e o horizontal
+          // (aberto). As duas variantes ficam empilhadas e fazem cross-fade conforme o estado.
+          className={cn(
+            "relative block h-9 overflow-hidden transition-[width] duration-300 ease-out",
+            collapsed ? "w-9" : "w-[190px]",
+          )}
+        >
+          <img
+            src={fechado}
+            alt="Logo da empresa"
+            className={cn(
+              "absolute inset-y-0 left-0 h-9 w-9 object-contain transition-opacity duration-300 ease-out",
+              collapsed ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <img
+            src={aberto}
+            alt="Logo da empresa"
+            aria-hidden={collapsed}
+            className={cn(
+              "absolute inset-y-0 left-0 h-9 w-auto max-w-[190px] object-contain object-left transition-opacity duration-300 ease-out",
+              collapsed ? "opacity-0" : "opacity-100",
+            )}
+          />
+        </span>
       </Link>
     );
   }
