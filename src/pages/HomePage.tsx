@@ -1,4 +1,5 @@
 // Página inicial (dashboard): acesso rápido + comunicados, agenda, eventos e aniversariantes.
+import * as React from "react";
 import { Link } from "react-router-dom";
 import {
   Megaphone, CalendarDays, Cake, CalendarClock, ArrowRight, Pin,
@@ -10,16 +11,19 @@ import {
 } from "@/lib/format";
 import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { NextMeetingCard } from "@/components/portal/NextMeetingCard";
+import { AgendaSemanaDialog } from "@/components/portal/AgendaSemanaDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePortal } from "@/context/PortalProvider";
 
 function Painel({
-  title, icon: Icon, to, children,
+  title, icon: Icon, to, acao, children,
 }: {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   to?: string;
+  /** Ação alternativa no canto do cabeçalho (usada quando não há uma rota "ver todos"). */
+  acao?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -29,6 +33,7 @@ function Painel({
           <Icon className="size-4 text-primary" />
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         </div>
+        {acao}
         {to && (
           <Link
             to={to}
@@ -54,6 +59,7 @@ export default function HomePage() {
   const eventos = useAsync(() => api.eventos.list());
   const aniversariantes = useAsync(() => api.aniversariantes.list());
   const links = useAsync(() => api.links.list(me?.email), [me?.email]);
+  const [semanaAberta, setSemanaAberta] = React.useState(false);
 
   // Aniversariantes do MÊS corrente (a API devolve o ano inteiro ordenado por mês/dia;
   // o painel da home mostra só quem faz aniversário neste mês, ordenado por dia).
@@ -190,7 +196,21 @@ export default function HomePage() {
       <div className="space-y-4">
         <NextMeetingCard />
 
-        <Painel title="Minha agenda" icon={CalendarClock}>
+        <Painel
+          title="Minha agenda"
+          icon={CalendarClock}
+          acao={
+            (agenda.data ?? []).length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSemanaAberta(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Ver mais <ArrowRight className="size-3" />
+              </button>
+            ) : undefined
+          }
+        >
           {agenda.loading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -253,6 +273,8 @@ export default function HomePage() {
           )}
         </Painel>
       </div>
+
+      <AgendaSemanaDialog open={semanaAberta} onOpenChange={setSemanaAberta} itens={agenda.data ?? []} />
     </div>
   );
 }
