@@ -3,7 +3,7 @@
 // comunicados obrigatórios com confirmação de leitura por colaborador.
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Megaphone, Plus, Pencil, Pin, AlertTriangle, CheckCircle2, Users, ImagePlus, X } from "lucide-react";
+import { Megaphone, Plus, Pencil, Pin, AlertTriangle, CheckCircle2, Users, ImagePlus, X, Tag } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Comunicado, Categoria, Prioridade, PublicoAlvo } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
@@ -11,14 +11,13 @@ import { comprimirImagem } from "@/lib/image";
 import { tempoRelativo, iniciais, CATEGORIA_META, PRIORIDADE_META } from "@/lib/format";
 import { CategoriaBadge, PrioridadeBadge } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
-import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { FormDialog, Field, FormSection, ToggleCard, ConfirmDelete } from "@/components/portal/crud";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
 import { Lightbox } from "@/components/portal/Lightbox";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Droplist } from "@/components/ui/droplist";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -389,129 +388,24 @@ export default function ComunicadosPage() {
           description="Ainda não há avisos publicados. Volte em breve."
         />
       ) : (
-        <div className="space-y-3">
-          {comunicados.map((c) => {
-            const jaLeu = !!c.leituras?.includes(meuUpn);
-            const totalLeituras = c.leituras?.length ?? 0;
-            return (
-              <div
-                key={c.id}
-                className={
-                  "rounded-xl border bg-card p-4 shadow-sm " +
-                  (c.obrigatorio && !jaLeu && !isAdmin
-                    ? "border-warning/50"
-                    : "border-border")
-                }
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CategoriaBadge categoria={c.categoria} />
-                      <PrioridadeBadge prioridade={c.prioridade} />
-                      {c.obrigatorio && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">
-                          <AlertTriangle className="size-3" /> Leitura obrigatória
-                        </span>
-                      )}
-                      {c.publico && c.publico !== "todos" && (
-                        <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
-                          {PUBLICO_META[c.publico]}
-                        </span>
-                      )}
-                      {(c.departamentos ?? []).map((d) => (
-                        <span
-                          key={d}
-                          className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
-                        >
-                          {d}
-                        </span>
-                      ))}
-                      <RestritoBadge perfis={c.perfis} />
-                      {c.fixado && <Pin className="size-3.5 text-primary" />}
-                    </div>
-                    <h3 className="font-semibold text-foreground">
-                      <Link to={`/comunicados/${c.id}`} className="hover:text-primary hover:underline">
-                        {c.titulo}
-                      </Link>
-                    </h3>
-                    {c.resumo && <p className="text-sm text-muted-foreground">{c.resumo}</p>}
-                    <p className="text-xs text-muted-foreground">
-                      {c.autor} · {tempoRelativo(c.publicadoEm)}
-                    </p>
+        <div className="space-y-6">
+          {grupos.fixados.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <Pin className="size-3.5 text-primary" /> Fixados
+              </h2>
+              <div className="space-y-3">{grupos.fixados.map(renderCard)}</div>
+            </section>
+          )}
 
-                    {/* Imagens anexadas */}
-                    {(c.imagens ?? []).length > 0 && (
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {(c.imagens ?? []).map((src, i) => (
-                          <button
-                            type="button"
-                            key={i}
-                            onClick={() => setLightbox(src)}
-                            className="size-24 overflow-hidden rounded-lg border border-border bg-secondary transition-opacity hover:opacity-90"
-                          >
-                            <img
-                              src={src}
-                              alt={`Imagem ${i + 1} do comunicado`}
-                              className="size-full object-cover"
-                            />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Confirmação de leitura (obrigatórios) */}
-                    {c.obrigatorio && !isAdmin && (
-                      <div className="pt-1">
-                        {jaLeu ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
-                            <CheckCircle2 className="size-4" /> Leitura confirmada
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => confirmarLeitura(c.id)}
-                            disabled={confirmando === c.id || !meuUpn}
-                          >
-                            <CheckCircle2 className="size-4" /> Confirmar leitura
-                          </Button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Contagem de confirmações (visão admin) — clique para ver quem confirmou */}
-                    {c.obrigatorio && isAdmin && (
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={() => totalLeituras > 0 && setVerLeitores(c)}
-                          disabled={totalLeituras === 0}
-                          className="inline-flex items-center gap-1.5 rounded-md text-xs text-muted-foreground transition-colors enabled:hover:text-primary enabled:hover:underline disabled:cursor-default"
-                        >
-                          <Users className="size-3.5" />
-                          {totalLeituras} confirmaç{totalLeituras === 1 ? "ão" : "ões"} de leitura
-                          {totalLeituras > 0 && <span className="text-primary">· ver quem</span>}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {gerencia && (
-                    <div className="flex shrink-0 items-center gap-1">
-                      {podeEditar && (
-                        <Button variant="ghost" size="icon" onClick={() => abrirEdicao(c)}>
-                          <Pencil className="size-4" />
-                        </Button>
-                      )}
-                      {podeExcluir && (
-                        <ConfirmDelete onConfirm={() => excluir(c.id)} label="Excluir comunicado" />
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {grupos.meses.map(([chave, itens]) => (
+            <section key={chave} className="space-y-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {rotuloMes(chave)}
+              </h2>
+              <div className="space-y-3">{itens.map(renderCard)}</div>
+            </section>
+          ))}
         </div>
       )}
 
@@ -519,39 +413,86 @@ export default function ComunicadosPage() {
         open={open}
         onOpenChange={setOpen}
         title={editId ? "Editar comunicado" : "Novo comunicado"}
-        description="Preencha as informações do aviso interno."
+        description="Escreva o aviso, classifique e escolha quem deve vê-lo."
         onSubmit={salvar}
+        submitLabel={editId ? "Salvar alterações" : "Publicar comunicado"}
         submitting={submitting}
+        // Diálogo mais largo: com 12 campos, `max-w-lg` espremia os pares em duas colunas
+        // estreitas (chips de departamento quebravam linha a cada palavra).
+        className="sm:max-w-3xl"
       >
-        <Field label="Título" htmlFor="titulo">
-          <Input
-            id="titulo"
-            value={form.titulo}
-            onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))}
-            placeholder="Ex.: Recesso de fim de ano"
-          />
-        </Field>
+        {/* 1) O que será comunicado */}
+        <FormSection title="Conteúdo" icon={Megaphone}>
+          <Field label="Título" htmlFor="titulo" required>
+            <Input
+              id="titulo"
+              value={form.titulo}
+              onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))}
+              placeholder="Ex.: Recesso de fim de ano"
+            />
+          </Field>
 
-        <Field label="Resumo" htmlFor="resumo">
-          <Input
-            id="resumo"
-            value={form.resumo}
-            onChange={(e) => setForm((f) => ({ ...f, resumo: e.target.value }))}
-            placeholder="Uma linha resumindo o aviso"
-          />
-        </Field>
+          <Field label="Resumo" htmlFor="resumo" hint="Aparece na lista e na home, abaixo do título.">
+            <Input
+              id="resumo"
+              value={form.resumo}
+              onChange={(e) => setForm((f) => ({ ...f, resumo: e.target.value }))}
+              placeholder="Uma linha resumindo o aviso"
+            />
+          </Field>
 
-        <Field label="Conteúdo" htmlFor="conteudo">
-          <Textarea
-            id="conteudo"
-            rows={4}
-            value={form.conteudo}
-            onChange={(e) => setForm((f) => ({ ...f, conteudo: e.target.value }))}
-            placeholder="Texto completo do comunicado"
-          />
-        </Field>
+          <Field label="Conteúdo" htmlFor="conteudo">
+            <Textarea
+              id="conteudo"
+              rows={6}
+              value={form.conteudo}
+              onChange={(e) => setForm((f) => ({ ...f, conteudo: e.target.value }))}
+              placeholder="Texto completo do comunicado"
+            />
+          </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Imagens" htmlFor="imagens" hint={`Até ${MAX_IMAGENS} imagens (JPG/PNG). Elas aparecem no detalhe do comunicado.`}>
+            <div className="flex flex-wrap items-center gap-2">
+              {form.imagens.map((src, i) => (
+                <div
+                  key={i}
+                  className="group relative size-20 overflow-hidden rounded-lg border border-border bg-secondary"
+                >
+                  <img src={src} alt={`Imagem ${i + 1}`} className="size-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removerImagem(i)}
+                    aria-label="Remover imagem"
+                    className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-foreground/70 text-background opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+              {form.imagens.length < MAX_IMAGENS && (
+                <label className="flex size-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-background text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
+                  <ImagePlus className="size-4" />
+                  {processandoImg ? "Processando…" : "Adicionar"}
+                  <input
+                    id="imagens"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={processandoImg}
+                    onChange={(e) => {
+                      void adicionarImagens(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </Field>
+        </FormSection>
+
+        {/* 2) Como ele é classificado */}
+        <FormSection title="Classificação" icon={Tag} className="grid gap-4 sm:grid-cols-3">
           <Field label="Categoria" htmlFor="categoria">
             <Droplist
               id="categoria"
@@ -571,11 +512,24 @@ export default function ComunicadosPage() {
               options={PRIORIDADE_OPTIONS}
             />
           </Field>
-        </div>
 
-        {/* Segmentação */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Público-alvo" htmlFor="publico">
+          <Field label="Autor" htmlFor="autor">
+            <Input
+              id="autor"
+              value={form.autor}
+              onChange={(e) => setForm((f) => ({ ...f, autor: e.target.value }))}
+              placeholder="Comunicação Interna"
+            />
+          </Field>
+        </FormSection>
+
+        {/* 3) Segmentação: contrato E departamento E perfil de acesso */}
+        <FormSection
+          title="Quem vai ver"
+          icon={Users}
+          description="Os três filtros se somam: contrato E departamento E perfil de acesso."
+        >
+          <Field label="Público-alvo" htmlFor="publico" className="sm:max-w-xs">
             <Droplist
               id="publico"
               className="w-full"
@@ -585,35 +539,58 @@ export default function ComunicadosPage() {
             />
           </Field>
 
-          <Field label="Departamentos" htmlFor="departamentos" hint="Selecione um ou mais. Vazio = todos.">
+          <Field
+            label="Departamentos"
+            htmlFor="departamentos"
+            hint={
+              deptOptions.length > 0
+                ? form.departamentos.length === 0
+                  ? "Nenhum selecionado = visível a todos os departamentos."
+                  : `${form.departamentos.length} departamento(s) selecionado(s).`
+                : "Separe por vírgula. Vazio = todos."
+            }
+          >
             {deptOptions.length > 0 ? (
-              <div className="flex max-h-36 flex-wrap gap-1.5 overflow-auto rounded-lg border border-border bg-background p-2">
-                {deptOptions.map((d) => {
-                  const sel = form.departamentos.includes(d);
-                  return (
-                    <button
-                      type="button"
-                      key={d}
-                      aria-pressed={sel}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          departamentos: sel
-                            ? f.departamentos.filter((x) => x !== d)
-                            : [...f.departamentos, d],
-                        }))
-                      }
-                      className={
-                        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors " +
-                        (sel
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-secondary text-secondary-foreground hover:border-primary/40")
-                      }
-                    >
-                      {d}
-                    </button>
-                  );
-                })}
+              <div className="space-y-2">
+                <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto rounded-lg border border-border bg-background p-2.5">
+                  {deptOptions.map((d) => {
+                    const sel = form.departamentos.includes(d);
+                    return (
+                      <button
+                        type="button"
+                        key={d}
+                        aria-pressed={sel}
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            departamentos: sel
+                              ? f.departamentos.filter((x) => x !== d)
+                              : [...f.departamentos, d],
+                          }))
+                        }
+                        className={
+                          "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors " +
+                          (sel
+                            ? "border-primary bg-primary/15 text-primary"
+                            : "border-border bg-secondary text-secondary-foreground hover:border-primary/40")
+                        }
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.departamentos.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={() => setForm((f) => ({ ...f, departamentos: [] }))}
+                  >
+                    Limpar seleção
+                  </Button>
+                )}
               </div>
             ) : (
               <Input
@@ -629,89 +606,31 @@ export default function ComunicadosPage() {
               />
             )}
           </Field>
-        </div>
 
-        {/* Segregação por perfil de acesso (RBAC do portal) — soma-se ao filtro acima. */}
-        <PerfisPicker
-          valor={form.perfis}
-          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
-        />
-
-        <Field label="Autor" htmlFor="autor">
-          <Input
-            id="autor"
-            value={form.autor}
-            onChange={(e) => setForm((f) => ({ ...f, autor: e.target.value }))}
-            placeholder="Comunicação Interna"
+          {/* Segregação por perfil de acesso (RBAC do portal) — soma-se ao filtro acima. */}
+          <PerfisPicker
+            valor={form.perfis}
+            onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
           />
-        </Field>
+        </FormSection>
 
-        <Field label="Imagens" htmlFor="imagens" hint={`Anexe até ${MAX_IMAGENS} imagens (JPG/PNG).`}>
-          <div className="space-y-2">
-            {form.imagens.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {form.imagens.map((src, i) => (
-                  <div
-                    key={i}
-                    className="group relative size-20 overflow-hidden rounded-lg border border-border bg-secondary"
-                  >
-                    <img src={src} alt={`Imagem ${i + 1}`} className="size-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removerImagem(i)}
-                      aria-label="Remover imagem"
-                      className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-foreground/70 text-background opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {form.imagens.length < MAX_IMAGENS && (
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
-                <ImagePlus className="size-4" />
-                {processandoImg ? "Processando…" : "Adicionar imagem"}
-                <input
-                  id="imagens"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  disabled={processandoImg}
-                  onChange={(e) => {
-                    void adicionarImagens(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            )}
-          </div>
-        </Field>
-
-        <div className="flex flex-wrap gap-5">
-          <Label htmlFor="obrigatorio" className="cursor-pointer">
-            <input
-              id="obrigatorio"
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={form.obrigatorio}
-              onChange={(e) => setForm((f) => ({ ...f, obrigatorio: e.target.checked }))}
-            />
-            Leitura obrigatória (exige confirmação)
-          </Label>
-
-          <Label htmlFor="fixado" className="cursor-pointer">
-            <input
-              id="fixado"
-              type="checkbox"
-              className="size-4 accent-primary"
-              checked={form.fixado}
-              onChange={(e) => setForm((f) => ({ ...f, fixado: e.target.checked }))}
-            />
-            Fixar no topo
-          </Label>
-        </div>
+        {/* 4) Como ele se comporta depois de publicado */}
+        <FormSection title="Publicação" icon={Pin} className="grid gap-3 sm:grid-cols-2">
+          <ToggleCard
+            checked={form.obrigatorio}
+            onChange={(v) => setForm((f) => ({ ...f, obrigatorio: v }))}
+            label="Leitura obrigatória"
+            hint="O colaborador precisa confirmar que leu; você acompanha quem já confirmou."
+            icon={AlertTriangle}
+          />
+          <ToggleCard
+            checked={form.fixado}
+            onChange={(v) => setForm((f) => ({ ...f, fixado: v }))}
+            label="Fixar no topo"
+            hint="Mantém o comunicado acima dos demais na lista e na home."
+            icon={Pin}
+          />
+        </FormSection>
       </FormDialog>
 
       {/* Lightbox de imagem (com zoom) */}
