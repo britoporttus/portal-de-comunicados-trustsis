@@ -5,11 +5,14 @@ import * as React from "react";
 import { ChevronLeft, ChevronRight, Video, MapPin } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgendaItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 const ALTURA_HORA = 46; // px por hora na grade
+/** A API da agenda cobre de HOJE até +14 dias — a navegação do calendário respeita essa janela. */
+const DIAS_DA_JANELA = 14;
 
 function inicioDaSemana(d: Date): Date {
   const x = new Date(d);
@@ -30,6 +33,10 @@ function mesmoDia(a: Date, b: Date): boolean {
 
 function hhmm(d: Date): string {
   return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function diaPorExtenso(d: Date): string {
+  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 }
 
 function rotuloDaSemana(ini: Date): string {
@@ -78,6 +85,15 @@ export function AgendaSemanaDialog({
   const hoje = React.useMemo(() => new Date(), []);
   const [semana, setSemana] = React.useState(() => inicioDaSemana(new Date()));
 
+  // Janela real de dados: de hoje (00h) até hoje + 14 dias (exclusivo). Fora disso não há o que mostrar,
+  // então a navegação por semanas é travada nesses limites.
+  const janelaIni = React.useMemo(() => {
+    const x = new Date(hoje);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  }, [hoje]);
+  const janelaFim = React.useMemo(() => somaDias(janelaIni, DIAS_DA_JANELA), [janelaIni]);
+
   // Reabrir o diálogo volta para a semana corrente.
   React.useEffect(() => {
     if (open) setSemana(inicioDaSemana(new Date()));
@@ -115,6 +131,9 @@ export function AgendaSemanaDialog({
   const topo = (d: Date) => ((d.getHours() * 60 + d.getMinutes() - horaIni * 60) / 60) * ALTURA_HORA;
 
   const semanaAtual = mesmoDia(semana, inicioDaSemana(hoje));
+  // Só avança enquanto a próxima semana ainda tocar a janela de 14 dias; só volta até a semana corrente.
+  const podeAvancar = somaDias(semana, 7) < janelaFim;
+  const podeVoltar = !semanaAtual;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,10 +141,18 @@ export function AgendaSemanaDialog({
         <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
             <DialogTitle className="text-sm font-semibold">Minha agenda</DialogTitle>
-            <p className="truncate text-xs text-muted-foreground">{rotuloDaSemana(semana)}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {rotuloDaSemana(semana)} · próximos {DIAS_DA_JANELA} dias
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-1 pr-8">
-            <Button variant="ghost" size="icon-sm" aria-label="Semana anterior" onClick={() => setSemana(somaDias(semana, -7))}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Semana anterior"
+              disabled={!podeVoltar}
+              onClick={() => podeVoltar && setSemana(somaDias(semana, -7))}
+            >
               <ChevronLeft className="size-4" />
             </Button>
             <Button
@@ -137,7 +164,13 @@ export function AgendaSemanaDialog({
             >
               Hoje
             </Button>
-            <Button variant="ghost" size="icon-sm" aria-label="Próxima semana" onClick={() => setSemana(somaDias(semana, 7))}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Próxima semana"
+              disabled={!podeAvancar}
+              onClick={() => podeAvancar && setSemana(somaDias(semana, 7))}
+            >
               <ChevronRight className="size-4" />
             </Button>
           </div>
@@ -149,8 +182,9 @@ export function AgendaSemanaDialog({
           <div className="grid flex-1 grid-cols-7">
             {dias.map((d) => {
               const eHoje = mesmoDia(d, hoje);
+              const foraDaJanela = d < janelaIni || d >= janelaFim;
               return (
-                <div key={d.toISOString()} className="flex flex-col items-center gap-0.5 py-2">
+                <div key={d.toISOString()} className={cn("flex flex-col items-center gap-0.5 py-2", foraDaJanela && "opacity-40")}>
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{DIAS[d.getDay()]}</span>
                   <span
                     className={cn(
@@ -167,6 +201,7 @@ export function AgendaSemanaDialog({
         </div>
 
         {/* Grade de horas */}
+        <TooltipProvider delay={120}>
         <div className="max-h-[60vh] overflow-y-auto px-4 pb-4">
           {/* pt-2: o rótulo da primeira hora fica levemente acima da linha e seria cortado pelo scroll. */}
           <div className="flex pt-2">
@@ -198,16 +233,17 @@ export function AgendaSemanaDialog({
                     className={cn(
                       "relative border-l border-border/60",
                       mesmoDia(d, hoje) && "bg-primary/[0.04]",
+                      // Dia fora da janela de 14 dias: não há dado para mostrar, então fica apagado.
+                      (d < janelaIni || d >= janelaFim) && "bg-muted/20",
                     )}
                   >
                     {blocos.map(({ item, ini, fim, col, cols }) => {
                       const top = Math.max(0, topo(ini));
                       const altura = Math.max(22, Math.min(alturaGrade - top, topo(fim) - topo(ini)));
-                      return (
+                      // O pill é montado à parte porque o TooltipTrigger do Base UI o recebe via `render`.
+                      const pill = (
                         <div
-                          key={item.id}
-                          title={`${item.titulo} — ${hhmm(ini)} às ${hhmm(fim)}`}
-                          className="absolute overflow-hidden rounded-md border border-primary/25 bg-primary/10 px-1.5 py-1 text-left"
+                          className="absolute cursor-default overflow-hidden rounded-[3px] border border-primary/25 bg-primary/10 px-1.5 py-1 text-left transition-colors hover:bg-primary/20"
                           style={{
                             top,
                             height: altura,
@@ -229,6 +265,24 @@ export function AgendaSemanaDialog({
                           )}
                         </div>
                       );
+                      return (
+                        <Tooltip key={item.id}>
+                          <TooltipTrigger render={pill} />
+                          <TooltipContent side="top" className="max-w-xs flex-col items-start gap-1 py-2 text-left">
+                            <p className="text-xs font-semibold leading-snug">{item.titulo}</p>
+                            <p className="text-[11px] leading-snug opacity-80">
+                              {diaPorExtenso(ini)} · {hhmm(ini)} – {hhmm(fim)}
+                            </p>
+                            <p className="flex items-center gap-1 text-[11px] leading-snug opacity-80">
+                              {item.online ? <Video className="size-3 shrink-0" /> : <MapPin className="size-3 shrink-0" />}
+                              <span>{item.online ? "Reunião online" : item.local || "Sem local definido"}</span>
+                            </p>
+                            {item.organizador && (
+                              <p className="text-[11px] leading-snug opacity-80">Organizador: {item.organizador}</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
                     })}
                   </div>
                 );
@@ -238,10 +292,11 @@ export function AgendaSemanaDialog({
 
           {daSemana.length === 0 && (
             <p className="pt-3 text-center text-xs text-muted-foreground">
-              Sem compromissos nesta semana. A agenda cobre os próximos 14 dias.
+              Sem compromissos nesta semana. A agenda cobre os próximos {DIAS_DA_JANELA} dias.
             </p>
           )}
         </div>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   );
