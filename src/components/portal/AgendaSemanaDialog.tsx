@@ -241,14 +241,18 @@ export function AgendaSemanaDialog({
                       const top = Math.max(0, topo(ini));
                       const altura = Math.max(22, Math.min(alturaGrade - top, topo(fim) - topo(ini)));
                       // O pill é montado à parte porque o TooltipTrigger do Base UI o recebe via `render`.
+                      // Fundo OPACO + borda sólida + faixa de acento à esquerda: com pills translúcidos
+                      // encostados um no outro não se distinguia onde um terminava e o outro começava.
                       const pill = (
                         <div
-                          className="absolute cursor-default overflow-hidden rounded-[3px] border border-primary/25 bg-primary/10 px-1.5 py-1 text-left transition-colors hover:bg-primary/20"
+                          className="absolute cursor-default overflow-hidden rounded-[3px] border border-border bg-card py-1 pl-2 pr-1.5 text-left shadow-xs ring-1 ring-background transition-colors before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-primary before:content-[''] hover:border-primary/50 hover:bg-primary/10"
                           style={{
                             top,
-                            height: altura,
-                            left: `calc(${(col / cols) * 100}% + 2px)`,
-                            width: `calc(${100 / cols}% - 4px)`,
+                            // -2px de altura e -6px de largura: abre uma calha visível entre
+                            // compromissos colados (mesmo horário ou horários seguidos).
+                            height: Math.max(20, altura - 2),
+                            left: `calc(${(col / cols) * 100}% + 3px)`,
+                            width: `calc(${100 / cols}% - 6px)`,
                           }}
                         >
                           <p className="truncate text-[11px] font-semibold leading-tight text-foreground">{item.titulo}</p>

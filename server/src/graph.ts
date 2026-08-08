@@ -359,9 +359,19 @@ export async function getAgenda(upn?: string): Promise<AgendaItem[]> {
     const q =
       `/users/${encodeURIComponent(target)}/calendarView` +
       `?startDateTime=${start.toISOString()}&endDateTime=${end.toISOString()}` +
-      `&$select=subject,start,end,location,isOnlineMeeting,organizer&$orderby=start/dateTime&$top=30`;
-    const res = await graphGet<{ value: any[] }>(q);
-    return res.value.map((e, i) => ({
+      `&$select=subject,start,end,location,isOnlineMeeting,organizer&$orderby=start/dateTime&$top=100`;
+    // PAGINA o calendarView: com $top fixo (era 30) uma agenda cheia de recorrências diárias
+    // era cortada nos primeiros dias — o portal "perdia" a segunda semana da janela.
+    const brutos: any[] = [];
+    let next: string | null = `${GRAPH}${q}`;
+    let guard = 0;
+    while (next && guard < 10) {
+      const pagina: { value: any[]; "@odata.nextLink"?: string } = await graphGetUrl(next);
+      brutos.push(...(pagina.value ?? []));
+      next = pagina["@odata.nextLink"] ?? null;
+      guard++;
+    }
+    return brutos.map((e, i) => ({
       id: e.id ?? `ag_${i}`,
       titulo: e.subject ?? "(sem título)",
       inicio: e.start?.dateTime ? `${e.start.dateTime}Z`.replace("ZZ", "Z") : new Date().toISOString(),

@@ -25,6 +25,13 @@ export function mockAgenda(): AgendaItem[] {
     { id: "ag3", titulo: "1:1 com gestora", inicio: iso(0, 15, 0), fim: iso(0, 15, 30), online: true, organizador: "Ana Beatriz Costa" },
     { id: "ag4", titulo: "Revisão de código — Portal Interno", inicio: iso(1, 10, 0), fim: iso(1, 11, 0), online: true },
     { id: "ag5", titulo: "Planejamento de sprint", inicio: iso(2, 14, 0), fim: iso(2, 15, 30), local: "Sala Ada Lovelace" },
+    // Compromissos colados (mesmo horário / horários seguidos) e na SEGUNDA semana da janela —
+    // exercitam a divisão em colunas e a navegação de semanas da visão de calendário.
+    { id: "ag6", titulo: "Comitê de Arquitetura", inicio: iso(3, 10, 0), fim: iso(3, 11, 0), online: true, organizador: "Marcos Antônio" },
+    { id: "ag7", titulo: "Entrevista técnica", inicio: iso(3, 10, 30), fim: iso(3, 11, 30), online: true, organizador: "Bruna Carvalho" },
+    { id: "ag8", titulo: "Retrospectiva do time", inicio: iso(8, 16, 0), fim: iso(8, 17, 0), online: true },
+    { id: "ag9", titulo: "Review com a diretoria", inicio: iso(10, 9, 0), fim: iso(10, 10, 0), local: "Sala Turing", organizador: "Marcos Antônio" },
+    { id: "ag10", titulo: "Treinamento de segurança", inicio: iso(12, 14, 0), fim: iso(12, 16, 0), online: true },
   ];
 }
 
