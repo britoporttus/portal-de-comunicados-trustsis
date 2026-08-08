@@ -10,7 +10,7 @@ import { TIPO_PONTO_META, TIPO_PONTO_ORDEM, nomeDoMes, ultimosMeses } from "@/li
 import type { RankingEntry } from "@/lib/types";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { cn } from "@/lib/utils";
 
 const MEDALHA = ["text-warning", "text-muted-foreground", "text-[#cd7f32]"]; // ouro, prata, bronze
@@ -54,6 +54,8 @@ function Podio({ top, meUpn }: { top: RankingEntry[]; meUpn: string }) {
 export default function RankingPage() {
   const { me } = usePortal();
   const meses = useMemo(() => ultimosMeses(), []);
+  // Valor do filtro é a chave "AAAA-MM" (string) — o label é o nome do mês.
+  const mesOptions = useMemo(() => meses.map((m) => ({ value: m, label: nomeDoMes(m) })), [meses]);
   const [mes, setMes] = useState(meses[0]);
   const meUpn = (me?.email ?? "").toLowerCase();
 
@@ -70,13 +72,13 @@ export default function RankingPage() {
         title="Ranking"
         description="Pontue interagindo com o portal. Quem lidera no fim do mês leva o prêmio."
         action={
-          <NativeSelect value={mes} onChange={(e) => setMes(e.target.value)} className="w-44" aria-label="Mês">
-            {meses.map((m) => (
-              <NativeSelectOption key={m} value={m}>
-                {nomeDoMes(m)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Droplist
+            value={mes}
+            onChange={(v) => setMes(v)}
+            options={mesOptions}
+            className="w-44"
+            aria-label="Mês"
+          />
         }
       />
 

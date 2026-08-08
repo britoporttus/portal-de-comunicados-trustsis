@@ -16,7 +16,7 @@ import type { Biblioteca } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Field, FormDialog, ConfirmDelete } from "@/components/portal/crud";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
@@ -190,18 +190,17 @@ export function BibliotecasAdmin() {
           />
         </Field>
         <Field label="Ícone" htmlFor="bib-icone">
-          <NativeSelect
+          <Droplist<string>
             id="bib-icone"
             className="w-full"
             value={form.icone}
-            onChange={(e) => setForm((f) => ({ ...f, icone: e.target.value }))}
-          >
-            {BIBLIOTECA_ICON_OPCOES.map(([k, label]) => (
-              <NativeSelectOption key={k} value={k}>
-                {label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => setForm((f) => ({ ...f, icone: v }))}
+            options={BIBLIOTECA_ICON_OPCOES.map(([k, label]) => ({
+              value: k,
+              label,
+              icon: <BibliotecaIcone nome={k} className="size-4" />,
+            }))}
+          />
         </Field>
         <PerfisPicker
           valor={form.perfis}

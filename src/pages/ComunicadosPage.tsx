@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
@@ -33,6 +33,14 @@ const PUBLICO_META: Record<PublicoAlvo, string> = {
   clt: "Somente CLT",
   pj: "Somente PJ",
 };
+
+// Opções dos Droplists do formulário — derivadas dos mesmos metadados de sempre.
+const CATEGORIA_OPTIONS = CATEGORIAS.map((k) => ({ value: k, label: CATEGORIA_META[k].label }));
+const PRIORIDADE_OPTIONS = PRIORIDADES.map((k) => ({ value: k, label: PRIORIDADE_META[k].label }));
+const PUBLICO_OPTIONS = (Object.keys(PUBLICO_META) as PublicoAlvo[]).map((k) => ({
+  value: k,
+  label: PUBLICO_META[k],
+}));
 
 const MESES_CAP = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -545,51 +553,36 @@ export default function ComunicadosPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Categoria" htmlFor="categoria">
-            <NativeSelect
+            <Droplist
               id="categoria"
               className="w-full"
               value={form.categoria}
-              onChange={(e) => setForm((f) => ({ ...f, categoria: e.target.value as Categoria }))}
-            >
-              {CATEGORIAS.map((k) => (
-                <NativeSelectOption key={k} value={k}>
-                  {CATEGORIA_META[k].label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              onChange={(v) => setForm((f) => ({ ...f, categoria: v }))}
+              options={CATEGORIA_OPTIONS}
+            />
           </Field>
 
           <Field label="Prioridade" htmlFor="prioridade">
-            <NativeSelect
+            <Droplist
               id="prioridade"
               className="w-full"
               value={form.prioridade}
-              onChange={(e) => setForm((f) => ({ ...f, prioridade: e.target.value as Prioridade }))}
-            >
-              {PRIORIDADES.map((k) => (
-                <NativeSelectOption key={k} value={k}>
-                  {PRIORIDADE_META[k].label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              onChange={(v) => setForm((f) => ({ ...f, prioridade: v }))}
+              options={PRIORIDADE_OPTIONS}
+            />
           </Field>
         </div>
 
         {/* Segmentação */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Público-alvo" htmlFor="publico">
-            <NativeSelect
+            <Droplist
               id="publico"
               className="w-full"
               value={form.publico}
-              onChange={(e) => setForm((f) => ({ ...f, publico: e.target.value as PublicoAlvo }))}
-            >
-              {(Object.keys(PUBLICO_META) as PublicoAlvo[]).map((k) => (
-                <NativeSelectOption key={k} value={k}>
-                  {PUBLICO_META[k]}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              onChange={(v) => setForm((f) => ({ ...f, publico: v }))}
+              options={PUBLICO_OPTIONS}
+            />
           </Field>
 
           <Field label="Departamentos" htmlFor="departamentos" hint="Selecione um ou mais. Vazio = todos.">

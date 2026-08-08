@@ -15,7 +15,7 @@ import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 
 const TIPO_META: Record<ReporteTipo, { label: string; icon: typeof Bug; className: string }> = {
   bug: { label: "Bug", icon: Bug, className: "bg-destructive/15 text-destructive border-destructive/30" },
@@ -85,15 +85,13 @@ function CartaoReporte({
 
       {isAdmin && (
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-          <NativeSelect
-            className="h-8 w-auto text-xs"
+          <Droplist
+            size="sm"
+            className="w-auto text-xs"
             value={r.status}
-            onChange={(e) => onStatus(r.id, e.target.value as ReporteStatus)}
-          >
-            {STATUS_ORDEM.map((s) => (
-              <NativeSelectOption key={s} value={s}>{STATUS_META[s].label}</NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => onStatus(r.id, v)}
+            options={STATUS_ORDEM.map((s) => ({ value: s, label: STATUS_META[s].label }))}
+          />
           <ConfirmDelete onConfirm={() => onDelete(r.id)} label="Excluir reporte" />
         </div>
       )}
@@ -208,16 +206,17 @@ export default function ReportarPage() {
       >
         <div className="grid grid-cols-2 gap-4">
           <Field label="Tipo" htmlFor="rep-tipo">
-            <NativeSelect
+            <Droplist<ReporteTipo>
               id="rep-tipo"
               className="w-full"
               value={form.tipo}
-              onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as ReporteTipo }))}
-            >
-              <NativeSelectOption value="bug">Bug (algo não funciona)</NativeSelectOption>
-              <NativeSelectOption value="melhoria">Melhoria (uma ideia)</NativeSelectOption>
-              <NativeSelectOption value="outro">Outro</NativeSelectOption>
-            </NativeSelect>
+              onChange={(v) => setForm((f) => ({ ...f, tipo: v }))}
+              options={[
+                { value: "bug", label: "Bug", description: "algo não funciona" },
+                { value: "melhoria", label: "Melhoria", description: "uma ideia" },
+                { value: "outro", label: "Outro" },
+              ]}
+            />
           </Field>
           <Field label="Página" htmlFor="rep-pagina" hint="Onde ocorreu (opcional).">
             <Input

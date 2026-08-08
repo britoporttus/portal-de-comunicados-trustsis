@@ -10,7 +10,7 @@ import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 /** Campo de nome com busca no diretório do Entra: filtra por nome e, ao escolher,
@@ -95,6 +95,9 @@ const MESES = [
 
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Opções de mês para o Droplist — valor NUMÉRICO (1–12), igual ao campo `mes` do registro. */
+const MES_OPTIONS = MESES.map((m, i) => ({ value: i + 1, label: capitalizar(m) }));
+
 export default function AniversariantesPage() {
   // Gestão pelo RBAC (recurso "aniversariantes"); o backend revalida.
   const { pode } = usePortal();
@@ -164,17 +167,12 @@ export default function AniversariantesPage() {
         description={`Celebre com quem faz aniversário em ${MESES[mesFiltro - 1]}`}
         action={
           <div className="flex gap-2">
-            <NativeSelect
+            <Droplist
               value={mesFiltro}
-              onChange={(e) => setMesFiltro(Number(e.target.value))}
+              onChange={(v) => setMesFiltro(v)}
+              options={MES_OPTIONS}
               aria-label="Filtrar por mês"
-            >
-              {MESES.map((m, i) => (
-                <NativeSelectOption key={i} value={i + 1}>
-                  {capitalizar(m)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
             {editavel && (
               <Button onClick={abrirNovo}>
                 <Plus /> Adicionar
@@ -271,22 +269,15 @@ export default function AniversariantesPage() {
             />
           </Field>
           <Field label="Mês" htmlFor="aniv-mes">
-            <NativeSelect
+            <Droplist
               id="aniv-mes"
               className="w-full"
-              value={form.mes ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, mes: Number(e.target.value) }))}
+              value={form.mes ?? null}
+              onChange={(v) => setForm((f) => ({ ...f, mes: v }))}
+              options={MES_OPTIONS}
+              placeholder="Selecione"
               required
-            >
-              <NativeSelectOption value="" disabled>
-                Selecione
-              </NativeSelectOption>
-              {MESES.map((m, i) => (
-                <NativeSelectOption key={i} value={i + 1}>
-                  {capitalizar(m)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           </Field>
         </div>
         <Field label="Foto" htmlFor="aniv-foto" hint="URL da foto (opcional)">

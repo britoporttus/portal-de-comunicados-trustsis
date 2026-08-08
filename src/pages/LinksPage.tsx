@@ -4,13 +4,13 @@ import { LayoutGrid, Plus, Pencil, ExternalLink, Building2 } from "lucide-react"
 import { api } from "@/lib/api";
 import type { LinkUtil } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
-import { LinkIcon } from "@/components/portal/shared";
+import { LinkIcon, iconForLink } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 
 const ICON_OPCOES = [
   ["link", "Link genérico"],
@@ -204,18 +204,16 @@ export default function LinksPage() {
           />
         </Field>
         <Field label="Ícone" htmlFor="lk-icon">
-          <NativeSelect
+          <Droplist<string>
             id="lk-icon"
             className="w-full"
             value={form.icon ?? "link"}
-            onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-          >
-            {ICON_OPCOES.map(([k, label]) => (
-              <NativeSelectOption key={k} value={k}>
-                {label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => setForm((f) => ({ ...f, icon: v }))}
+            options={ICON_OPCOES.map(([k, label]) => {
+              const Icone = iconForLink(k);
+              return { value: k, label, icon: <Icone /> };
+            })}
+          />
         </Field>
       </FormDialog>
     </div>

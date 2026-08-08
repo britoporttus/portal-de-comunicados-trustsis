@@ -14,11 +14,11 @@ import { useAsync } from "@/lib/useAsync";
 import type { LinkUtil } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Field, FormDialog, ConfirmDelete } from "@/components/portal/crud";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
-import { LinkIcon } from "@/components/portal/shared";
+import { LinkIcon, iconForLink } from "@/components/portal/shared";
 
 /** Categorias sugeridas (o campo é livre — o admin pode digitar outra). */
 const CATEGORIAS = ["Dashboards", "Sistemas", "Comercial", "RH", "Marketing", "Geral"];
@@ -248,18 +248,16 @@ export function AtalhosAdmin() {
           </Field>
         </div>
         <Field label="Ícone" htmlFor="atl-icon" hint="Usado quando o site não tem favicon próprio.">
-          <NativeSelect
+          <Droplist<string>
             id="atl-icon"
             className="w-full"
             value={form.icon}
-            onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-          >
-            {ICON_OPCOES.map(([k, label]) => (
-              <NativeSelectOption key={k} value={k}>
-                {label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => setForm((f) => ({ ...f, icon: v }))}
+            options={ICON_OPCOES.map(([k, label]) => {
+              const Icone = iconForLink(k);
+              return { value: k, label, icon: <Icone /> };
+            })}
+          />
         </Field>
         <PerfisPicker
           valor={form.perfis}

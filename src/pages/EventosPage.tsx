@@ -20,7 +20,7 @@ import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Badge } from "@/components/ui/badge";
 
 export const TIPO_META: Record<Evento["tipo"], { label: string; icon: LucideIcon; className: string }> = {
@@ -32,6 +32,9 @@ export const TIPO_META: Record<Evento["tipo"], { label: string; icon: LucideIcon
 };
 
 const TIPOS = Object.keys(TIPO_META) as Evento["tipo"][];
+
+// Opções do Droplist de tipo no formulário — derivadas do mesmo TIPO_META.
+const TIPO_OPTIONS = TIPOS.map((t) => ({ value: t, label: TIPO_META[t].label }));
 
 // ISO -> valor de <input type="datetime-local"> ("YYYY-MM-DDTHH:mm", horário local).
 function toLocalInput(iso: string): string {
@@ -284,18 +287,13 @@ export default function EventosPage() {
         </Field>
 
         <Field label="Tipo" htmlFor="ev-tipo">
-          <NativeSelect
+          <Droplist
             id="ev-tipo"
             className="w-full"
             value={form.tipo}
-            onChange={(ev) => setForm((f) => ({ ...f, tipo: ev.target.value as Evento["tipo"] }))}
-          >
-            {TIPOS.map((t) => (
-              <NativeSelectOption key={t} value={t}>
-                {TIPO_META[t].label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => setForm((f) => ({ ...f, tipo: v }))}
+            options={TIPO_OPTIONS}
+          />
         </Field>
 
         <Field label="Local" htmlFor="ev-local">

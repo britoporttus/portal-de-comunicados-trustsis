@@ -11,7 +11,7 @@ import { tempoRelativo, dataLonga } from "@/lib/format";
 import { EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /** Rótulo legível de cada ação auditada (`recurso.verbo`). */
@@ -78,19 +78,16 @@ export function AuditoriaAdmin() {
             className="h-9 w-56 pl-8"
           />
         </div>
-        <NativeSelect
+        <Droplist<string>
           value={recurso}
-          onChange={(e) => setRecurso(e.target.value)}
+          onChange={(v) => setRecurso(v)}
           className="w-44"
           aria-label="Área"
-        >
-          <NativeSelectOption value="todos">Todas as áreas</NativeSelectOption>
-          {recursos.map((r) => (
-            <NativeSelectOption key={r} value={r}>
-              {r}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          options={[
+            { value: "todos", label: "Todas as áreas" },
+            ...recursos.map((r) => ({ value: r, label: r })),
+          ]}
+        />
       </div>
 
       {filtrados.length === 0 ? (

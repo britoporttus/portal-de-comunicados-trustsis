@@ -213,10 +213,12 @@ const REDE_META: Record<string, { label: string; className: string }> = {
   youtube: { label: "YT", className: "bg-[#ff0000] text-white" },
 };
 
-export function RedeIcon({ rede }: { rede: string }) {
+// `className` permite reaproveitar o mesmo selo em tamanho menor (ex.: dentro de um Droplist),
+// sem duplicar o mapa de cores das redes.
+export function RedeIcon({ rede, className }: { rede: string; className?: string }) {
   const m = REDE_META[rede] ?? { label: "?", className: "bg-muted text-muted-foreground" };
   return (
-    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold", m.className)}>
+    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold", m.className, className)}>
       {m.label}
     </span>
   );

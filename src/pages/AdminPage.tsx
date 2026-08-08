@@ -17,7 +17,7 @@ import { tempoRelativo } from "@/lib/format";
 import { PageHeader } from "@/components/portal/page-kit";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 import { PerfisAdmin } from "@/components/admin/PerfisAdmin";
 import { IntegracaoAdmin } from "@/components/admin/IntegracaoAdmin";
 import { BibliotecasAdmin } from "@/components/admin/BibliotecasAdmin";
@@ -43,6 +43,8 @@ const ABAS = [
 
 export default function AdminPage() {
   const meses = useMemo(() => ultimosMeses(), []);
+  // Valor do filtro é a chave "AAAA-MM" (string) — o label é o nome do mês.
+  const mesOptions = useMemo(() => meses.map((m) => ({ value: m, label: nomeDoMes(m) })), [meses]);
   const [mes, setMes] = useState(meses[0]);
 
   return (
@@ -96,18 +98,13 @@ export default function AdminPage() {
             <p className="text-sm text-muted-foreground">
               Extrato de pontuação por dia: quem pontuou e como (auditoria da gamificação).
             </p>
-            <NativeSelect
+            <Droplist
               value={mes}
-              onChange={(e) => setMes(e.target.value)}
+              onChange={(v) => setMes(v)}
+              options={mesOptions}
               className="w-44"
               aria-label="Mês"
-            >
-              {meses.map((m) => (
-                <NativeSelectOption key={m} value={m}>
-                  {nomeDoMes(m)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           </div>
           <AtividadePontosAdmin mes={mes} />
         </TabsContent>

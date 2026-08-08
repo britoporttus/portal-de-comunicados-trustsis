@@ -16,7 +16,7 @@ import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist } from "@/components/ui/droplist";
 
 type Rede = PublicacaoSocial["rede"];
 
@@ -194,20 +194,17 @@ export default function SocialPage() {
         submitting={submitting}
       >
         <Field label="Rede" htmlFor="rede">
-          <NativeSelect
+          <Droplist<Rede>
             id="rede"
             className="w-full"
             value={form.rede ?? "linkedin"}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, rede: e.target.value as Rede }))
-            }
-          >
-            {REDES.map((r) => (
-              <NativeSelectOption key={r.v} value={r.v}>
-                {r.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            onChange={(v) => setForm((f) => ({ ...f, rede: v }))}
+            options={REDES.map((r) => ({
+              value: r.v,
+              label: r.label,
+              icon: <RedeIcon rede={r.v} className="size-5 rounded text-[10px]" />,
+            }))}
+          />
         </Field>
 
         <Field label="Autor" htmlFor="autor">

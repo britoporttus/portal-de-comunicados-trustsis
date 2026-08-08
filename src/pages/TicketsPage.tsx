@@ -13,7 +13,7 @@ import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-k
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { Droplist, type DroplistOption } from "@/components/ui/droplist";
 import { FormDialog, Field } from "@/components/portal/crud";
 
 // Metadados visuais (rótulo + classes por token — nada hardcoded).
@@ -37,6 +37,20 @@ const TIPO_LABEL: Record<TicketTipo, string> = {
   incidente: "Incidente",
   requisicao: "Requisição",
 };
+
+// Opções dos Droplists do formulário. No tipo, o "porquê" que antes vinha entre parênteses
+// no rótulo vira `description` (linha secundária), deixando o rótulo limpo.
+const TIPO_OPTIONS: DroplistOption<TicketTipo>[] = [
+  { value: "incidente", label: TIPO_LABEL.incidente, description: "algo não funciona" },
+  { value: "requisicao", label: TIPO_LABEL.requisicao, description: "pedir um serviço" },
+];
+
+const PRIORIDADE_OPTIONS: DroplistOption<TicketPrioridade>[] = [
+  { value: "baixa", label: PRIO_META.baixa.label },
+  { value: "media", label: PRIO_META.media.label },
+  { value: "alta", label: PRIO_META.alta.label },
+  { value: "critica", label: PRIO_META.critica.label },
+];
 
 function Chip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -190,28 +204,22 @@ export default function TicketsPage() {
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Tipo" htmlFor="tkt-tipo">
-            <NativeSelect
+            <Droplist
               id="tkt-tipo"
               className="w-full"
               value={tipo}
-              onChange={(e) => setTipo(e.target.value as TicketTipo)}
-            >
-              <NativeSelectOption value="incidente">Incidente (algo não funciona)</NativeSelectOption>
-              <NativeSelectOption value="requisicao">Requisição (pedir um serviço)</NativeSelectOption>
-            </NativeSelect>
+              onChange={(v) => setTipo(v)}
+              options={TIPO_OPTIONS}
+            />
           </Field>
           <Field label="Prioridade" htmlFor="tkt-prio">
-            <NativeSelect
+            <Droplist
               id="tkt-prio"
               className="w-full"
               value={prioridade}
-              onChange={(e) => setPrioridade(e.target.value as TicketPrioridade)}
-            >
-              <NativeSelectOption value="baixa">Baixa</NativeSelectOption>
-              <NativeSelectOption value="media">Média</NativeSelectOption>
-              <NativeSelectOption value="alta">Alta</NativeSelectOption>
-              <NativeSelectOption value="critica">Crítica</NativeSelectOption>
-            </NativeSelect>
+              onChange={(v) => setPrioridade(v)}
+              options={PRIORIDADE_OPTIONS}
+            />
           </Field>
         </div>
         <Field label="Descrição" htmlFor="tkt-desc" hint="Quanto mais detalhes, mais rápida a resolução.">
