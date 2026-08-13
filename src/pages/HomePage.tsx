@@ -59,7 +59,23 @@ export default function HomePage() {
   const eventos = useAsync(() => api.eventos.list());
   const aniversariantes = useAsync(() => api.aniversariantes.list());
   const links = useAsync(() => api.links.list(me?.email), [me?.email]);
+  // Atalhos da EMPRESA publicados pelo admin (já filtrados por perfil no backend):
+  // devem aparecer no Acesso rápido junto com os atalhos pessoais do colaborador.
+  const atalhos = useAsync(() => api.atalhos.list(), []);
   const [semanaAberta, setSemanaAberta] = React.useState(false);
+
+  // Acesso rápido = atalhos institucionais (do perfil do usuário) primeiro, depois os pessoais.
+  // Dedup por URL para não repetir um link que exista nas duas fontes.
+  const acessoRapido = React.useMemo(() => {
+    const vistos = new Set<string>();
+    const combinados = [...(atalhos.data ?? []), ...(links.data ?? [])];
+    return combinados.filter((l) => {
+      const chave = (l.url || "").trim().toLowerCase();
+      if (!chave || vistos.has(chave)) return false;
+      vistos.add(chave);
+      return true;
+    });
+  }, [atalhos.data, links.data]);
 
   // Aniversariantes do MÊS corrente (a API devolve o ano inteiro ordenado por mês/dia;
   // o painel da home mostra só quem faz aniversário neste mês, ordenado por dia).
@@ -75,17 +91,17 @@ export default function HomePage() {
         {/* Acesso rápido (limitado à largura desta coluna; quebra pra baixo) */}
         <section>
           <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
-          {links.loading ? (
+          {links.loading || atalhos.loading ? (
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-8 w-28 rounded-lg" />
               ))}
             </div>
-          ) : (links.data ?? []).length === 0 ? (
+          ) : acessoRapido.length === 0 ? (
             <LinhaVazia texto="Nenhum atalho cadastrado." />
           ) : (
             <div className="flex flex-wrap gap-2">
-              {(links.data ?? []).slice(0, 16).map((l) => (
+              {acessoRapido.slice(0, 16).map((l) => (
                 <a
                   key={l.id}
                   href={l.url}
