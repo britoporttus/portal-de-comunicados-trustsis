@@ -13,6 +13,7 @@ import type { PoliticaDoc } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { usePortal } from "@/context/PortalProvider";
 import { dataLonga } from "@/lib/format";
+import { Link } from "react-router-dom";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { DocsLista } from "@/components/portal/DocsLista";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +75,13 @@ export default function PoliticasPage() {
             isAdmin
               ? "As políticas são lidas de uma pasta compartilhada do SharePoint/OneDrive. Informe o link da pasta em Administração › Integração para que os documentos apareçam aqui."
               : "As políticas internas aparecerão aqui assim que forem publicadas na pasta compartilhada."
+          }
+          action={
+            isAdmin ? (
+              <Button size="sm" render={<Link to="/admin?tab=integracao" />}>
+                Cadastrar link da pasta
+              </Button>
+            ) : undefined
           }
         />
       ) : (

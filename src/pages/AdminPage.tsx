@@ -5,6 +5,7 @@
 // Novas capacidades de admin (bibliotecas, links por perfil, auditoria…) entram aqui como
 // novas abas, em vez de virarem itens soltos no menu.
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ShieldCheck, Activity, Stethoscope, Users, LayoutList, Wifi, WifiOff, PlugZap,
   FolderOpen, LayoutGrid, Palette, History, BarChart3,
@@ -47,6 +48,11 @@ export default function AdminPage() {
   const mesOptions = useMemo(() => meses.map((m) => ({ value: m, label: nomeDoMes(m) })), [meses]);
   const [mes, setMes] = useState(meses[0]);
 
+  // A aba ativa é refletida na URL (?tab=…) para permitir deep-link — outras telas (ex.: o
+  // estado vazio de Políticas) mandam o admin direto para a aba certa da Integração.
+  const [params, setParams] = useSearchParams();
+  const abaAtual = ABAS.some((a) => a.value === params.get("tab")) ? params.get("tab")! : "perfis";
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -55,7 +61,16 @@ export default function AdminPage() {
         description="Perfis de acesso, integração com o Entra ID, auditoria e diagnóstico — tudo em um só lugar."
       />
 
-      <Tabs defaultValue="perfis" className="space-y-4">
+      <Tabs
+        value={abaAtual}
+        onValueChange={(v) =>
+          setParams((p) => {
+            p.set("tab", String(v));
+            return p;
+          }, { replace: true })
+        }
+        className="space-y-4"
+      >
         {/* Barra de abas: pílula com respiro, quebra em telas estreitas e acento ciano no item ativo. */}
         <TabsList className="h-auto max-w-full flex-wrap justify-start gap-1 rounded-2xl border border-border bg-muted/50 p-1.5 group-data-horizontal/tabs:h-auto">
           {ABAS.map(({ value, label, icon: Icon }) => (
