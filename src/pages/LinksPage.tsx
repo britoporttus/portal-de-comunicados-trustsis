@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { LayoutGrid, Plus, Pencil, ExternalLink, Building2 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { LinkUtil } from "@/lib/types";
+import { atalhoVisivelPorDepto } from "@/lib/atalhos";
 import { useAsync } from "@/lib/useAsync";
 import { LinkIcon, iconForLink } from "@/components/portal/shared";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
@@ -71,17 +72,19 @@ export default function LinksPage() {
 
   const links = data ?? [];
 
-  // Agrupa os atalhos corporativos por categoria (Dashboards, Sistemas, Comercial…).
+  // Agrupa os atalhos corporativos por categoria (Dashboards, Sistemas, Comercial…),
+  // já filtrados pelo departamento do colaborador (além do perfil, que o backend aplica).
   const gruposEmpresa = useMemo(() => {
     const mapa = new Map<string, LinkUtil[]>();
     for (const a of atalhos ?? []) {
+      if (!atalhoVisivelPorDepto(a, me?.area)) continue;
       const cat = a.categoria?.trim() || "Geral";
       const arr = mapa.get(cat);
       if (arr) arr.push(a);
       else mapa.set(cat, [a]);
     }
     return [...mapa.entries()];
-  }, [atalhos]);
+  }, [atalhos, me?.area]);
 
   return (
     <div>

@@ -42,15 +42,20 @@ interface FormState {
   categoria: string;
   descricao: string;
   ordem: string;
+  departamentos: string[];
   perfis: string[];
 }
 
 const VAZIO: FormState = {
-  label: "", url: "", icon: "link", categoria: "Dashboards", descricao: "", ordem: "", perfis: [],
+  label: "", url: "", icon: "link", categoria: "Dashboards", descricao: "", ordem: "",
+  departamentos: [], perfis: [],
 };
 
 export function AtalhosAdmin() {
   const { data, loading, reload } = useAsync(() => api.atalhos.list(), []);
+  // Departamentos existentes (Entra) para segmentar o atalho — igual aos Comunicados.
+  const { data: deptData } = useAsync(() => api.departamentos(), []);
+  const deptOptions = deptData ?? [];
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<LinkUtil | null>(null);
   const [form, setForm] = useState<FormState>(VAZIO);
@@ -87,6 +92,7 @@ export function AtalhosAdmin() {
       categoria: a.categoria ?? "Geral",
       descricao: a.descricao ?? "",
       ordem: a.ordem === undefined ? "" : String(a.ordem),
+      departamentos: a.departamentos ?? [],
       perfis: a.perfis ?? [],
     });
     setAberto(true);
@@ -107,6 +113,7 @@ export function AtalhosAdmin() {
         categoria: form.categoria.trim() || "Geral",
         descricao: form.descricao.trim() || undefined,
         ordem: form.ordem.trim() ? Number(form.ordem) : undefined,
+        departamentos: form.departamentos,
         perfis: form.perfis,
       };
       if (editando) await api.atalhos.update(editando.id, corpo);
@@ -130,9 +137,11 @@ export function AtalhosAdmin() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           Atalhos institucionais exibidos no topo de{" "}
-          <strong className="font-medium text-foreground">Links úteis</strong>, com segregação por
-          perfil. É aqui que entram os dashboards externos (Power BI) e os sistemas do time — o
-          portal aponta para a ferramenta de origem, sem replicar indicadores.
+          <strong className="font-medium text-foreground">Links úteis</strong> e no Acesso rápido da
+          home. Segmente por <strong className="font-medium text-foreground">departamento</strong>{" "}
+          (igual aos comunicados) — ex.: o link do SAP aparece só para a AMS — e, se precisar,
+          restrinja também por perfil de acesso. É aqui que entram os dashboards externos (Power BI)
+          e os sistemas do time.
         </p>
         <Button onClick={abrirNovo}>
           <Plus className="size-4" /> Novo atalho
@@ -166,8 +175,16 @@ export function AtalhosAdmin() {
                       <LinkIcon url={a.url} icon={a.icon} label={a.label} className="size-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium text-foreground">{a.label}</p>
+                        {(a.departamentos ?? []).map((d) => (
+                          <span
+                            key={d}
+                            className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+                          >
+                            {d}
+                          </span>
+                        ))}
                         <RestritoBadge perfis={a.perfis} />
                       </div>
                       <p className="truncate text-[11px] text-muted-foreground">
@@ -193,7 +210,7 @@ export function AtalhosAdmin() {
         open={aberto}
         onOpenChange={setAberto}
         title={editando ? "Editar atalho" : "Novo atalho da empresa"}
-        description="O atalho aparece em Links úteis para quem tiver os perfis selecionados."
+        description="O atalho aparece em Links úteis e no Acesso rápido para os departamentos (e perfis) selecionados."
         onSubmit={salvar}
         submitting={salvando}
       >
@@ -259,10 +276,78 @@ export function AtalhosAdmin() {
             })}
           />
         </Field>
+        <Field
+          label="Departamentos"
+          htmlFor="atl-deptos"
+          hint={
+            deptOptions.length > 0
+              ? form.departamentos.length === 0
+                ? "Nenhum selecionado = todos os departamentos. Ex.: escolha AMS e o atalho aparece só para a AMS."
+                : `${form.departamentos.length} departamento(s) selecionado(s).`
+              : "Separe por vírgula. Vazio = todos."
+          }
+        >
+          {deptOptions.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto rounded-lg border border-border bg-background p-2.5">
+                {deptOptions.map((d) => {
+                  const sel = form.departamentos.includes(d);
+                  return (
+                    <button
+                      type="button"
+                      key={d}
+                      aria-pressed={sel}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          departamentos: sel
+                            ? f.departamentos.filter((x) => x !== d)
+                            : [...f.departamentos, d],
+                        }))
+                      }
+                      className={
+                        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors " +
+                        (sel
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-secondary text-secondary-foreground hover:border-primary/40")
+                      }
+                    >
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.departamentos.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground"
+                  onClick={() => setForm((f) => ({ ...f, departamentos: [] }))}
+                >
+                  Limpar seleção
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Input
+              id="atl-deptos"
+              value={form.departamentos.join(", ")}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  departamentos: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                }))
+              }
+              placeholder="Ex.: AMS, Comercial, Projetos"
+            />
+          )}
+        </Field>
+
         <PerfisPicker
           valor={form.perfis}
           onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
-          label="Quem enxerga este atalho"
+          label="Restringir também por perfil de acesso (opcional)"
         />
       </FormDialog>
     </div>

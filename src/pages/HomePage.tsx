@@ -9,6 +9,7 @@ import { useAsync } from "@/lib/useAsync";
 import {
   dataLonga, diaSemana, faixaHorario, tempoRelativo, mesAtualNome, iniciais,
 } from "@/lib/format";
+import { atalhoVisivelPorDepto } from "@/lib/atalhos";
 import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { NextMeetingCard } from "@/components/portal/NextMeetingCard";
 import { AgendaSemanaDialog } from "@/components/portal/AgendaSemanaDialog";
@@ -52,6 +53,39 @@ function LinhaVazia({ texto }: { texto: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{texto}</p>;
 }
 
+/** Um grupo de chips do "Acesso rápido" (empresa/equipe ou pessoais).
+ *  Não renderiza nada quando o grupo está vazio. */
+function GrupoAtalhos({
+  titulo,
+  itens,
+}: {
+  titulo: string;
+  itens: import("@/lib/types").LinkUtil[];
+}) {
+  if (itens.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {titulo}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {itens.slice(0, 16).map((l) => (
+          <a
+            key={l.id}
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+          >
+            <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
+            <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { me } = usePortal();
   const comunicados = useAsync(() => api.comunicados.list());
@@ -64,18 +98,30 @@ export default function HomePage() {
   const atalhos = useAsync(() => api.atalhos.list(), []);
   const [semanaAberta, setSemanaAberta] = React.useState(false);
 
-  // Acesso rápido = atalhos institucionais (do perfil do usuário) primeiro, depois os pessoais.
-  // Dedup por URL para não repetir um link que exista nas duas fontes.
-  const acessoRapido = React.useMemo(() => {
+  // Acesso rápido separado em dois grupos (feedback do usuário):
+  //  - "Da empresa/equipe": atalhos institucionais publicados pelo admin, filtrados pelo
+  //    perfil (no backend) E pelo departamento do colaborador (aqui, como nos comunicados).
+  //  - "Meus atalhos": os links pessoais do colaborador.
+  // Dedup por URL: um atalho pessoal que repita um institucional não aparece duas vezes.
+  const { institucionais, pessoais } = React.useMemo(() => {
     const vistos = new Set<string>();
-    const combinados = [...(atalhos.data ?? []), ...(links.data ?? [])];
-    return combinados.filter((l) => {
-      const chave = (l.url || "").trim().toLowerCase();
-      if (!chave || vistos.has(chave)) return false;
-      vistos.add(chave);
-      return true;
-    });
-  }, [atalhos.data, links.data]);
+    const dedup = (lista: typeof links.data) => {
+      const out: NonNullable<typeof links.data> = [];
+      for (const l of lista ?? []) {
+        const chave = (l.url || "").trim().toLowerCase();
+        if (!chave || vistos.has(chave)) continue;
+        vistos.add(chave);
+        out.push(l);
+      }
+      return out;
+    };
+    const institucionais = dedup(
+      (atalhos.data ?? []).filter((a) => atalhoVisivelPorDepto(a, me?.area)),
+    );
+    const pessoais = dedup(links.data);
+    return { institucionais, pessoais };
+  }, [atalhos.data, links.data, me?.area]);
+  const temAtalhos = institucionais.length > 0 || pessoais.length > 0;
 
   // Aniversariantes do MÊS corrente (a API devolve o ano inteiro ordenado por mês/dia;
   // o painel da home mostra só quem faz aniversário neste mês, ordenado por dia).
@@ -97,22 +143,12 @@ export default function HomePage() {
                 <Skeleton key={i} className="h-8 w-28 rounded-lg" />
               ))}
             </div>
-          ) : acessoRapido.length === 0 ? (
+          ) : !temAtalhos ? (
             <LinhaVazia texto="Nenhum atalho cadastrado." />
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {acessoRapido.slice(0, 16).map((l) => (
-                <a
-                  key={l.id}
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
-                >
-                  <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
-                  <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
-                </a>
-              ))}
+            <div className="space-y-4">
+              <GrupoAtalhos titulo="Da empresa e da sua equipe" itens={institucionais} />
+              <GrupoAtalhos titulo="Meus atalhos" itens={pessoais} />
             </div>
           )}
         </section>

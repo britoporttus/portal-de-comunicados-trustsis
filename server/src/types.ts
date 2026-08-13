@@ -64,6 +64,9 @@ export interface LinkUtil {
   descricao?: string;
   /** Ordem manual dentro da categoria (menor primeiro). */
   ordem?: number;
+  /** Departamentos que enxergam o atalho (vazio/ausente = todos). Mesma segmentação
+   *  dos Comunicados: compara com a área do colaborador (filtro no front, como Comunicados). */
+  departamentos?: string[];
 }
 
 /** Biblioteca de documentos: uma pasta compartilhada do SharePoint/OneDrive listada

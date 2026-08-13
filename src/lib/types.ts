@@ -57,6 +57,9 @@ export interface LinkUtil {
   categoria?: string;
   descricao?: string;
   ordem?: number;
+  /** Departamentos que enxergam o atalho (vazio/ausente = todos). Mesma segmentação
+   *  dos Comunicados: compara com a área do colaborador. Só vale para atalhos da empresa. */
+  departamentos?: string[];
 }
 
 /** Biblioteca de documentos: pasta do SharePoint/OneDrive listada (read-only) no portal.
