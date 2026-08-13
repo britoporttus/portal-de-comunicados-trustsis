@@ -32,6 +32,9 @@ export interface Evento {
   fim?: string;
   local: string;
   imagem?: string; // foto opcional (data URL) — aparece no lugar da data
+  // Segmentação (mesma dos comunicados): quem VÊ o evento e quem recebe o convite de agenda.
+  publico?: PublicoAlvo; // default "todos"
+  departamentos?: string[]; // vazio/ausente = todos os departamentos
   /** Perfis de acesso que enxergam o evento (vazio/ausente = todos). */
   perfis?: string[];
   /** Fase 3 — chaves de quem já enviou o evento para a própria agenda do Outlook. */

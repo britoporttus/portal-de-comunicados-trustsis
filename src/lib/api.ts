@@ -90,6 +90,13 @@ export const api = {
         comUpn(`/eventos/${id}/agenda`, upn),
         { method: "POST" },
       ),
+    // Admin/gestor: envia o convite para a agenda do Outlook de TODOS os colaboradores do
+    // segmento do evento (departamento/público). `demo: true` no preview (nada é escrito).
+    enviarAgenda: (id: string) =>
+      req<{
+        ok: boolean; enviados: number; jaTinham: number; falhas: number; total: number;
+        demo?: boolean; semDestinatarios?: boolean; erro?: string;
+      }>(`/eventos/${id}/enviar-agenda`, { method: "POST" }),
   },
   aniversariantes: {
     list: () => req<Aniversariante[]>("/aniversariantes"),

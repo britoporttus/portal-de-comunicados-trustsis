@@ -4,11 +4,11 @@ import { Link } from "react-router-dom";
 import {
   CalendarDays, Plus, Pencil, MapPin, Clock,
   PartyPopper, Coffee, Users, GraduationCap, CalendarClock,
-  ImagePlus, X,
+  ImagePlus, X, CalendarPlus, Loader2, CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Evento } from "@/lib/types";
+import type { Evento, PublicoAlvo } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { comprimirImagem } from "@/lib/image";
 import { diaSemana, faixaHorario } from "@/lib/format";
@@ -36,6 +36,30 @@ const TIPOS = Object.keys(TIPO_META) as Evento["tipo"][];
 // Opções do Droplist de tipo no formulário — derivadas do mesmo TIPO_META.
 const TIPO_OPTIONS = TIPOS.map((t) => ({ value: t, label: TIPO_META[t].label }));
 
+// Segmentação por tipo de contrato (mesma dos comunicados).
+const PUBLICO_META: Record<PublicoAlvo, string> = {
+  todos: "Todos os colaboradores",
+  clt: "Somente CLT",
+  pj: "Somente PJ",
+};
+const PUBLICO_OPTIONS = (Object.keys(PUBLICO_META) as PublicoAlvo[]).map((k) => ({
+  value: k,
+  label: PUBLICO_META[k],
+}));
+
+/** Decide se o evento é destinado ao colaborador (por contrato e departamento) — mesmo
+ *  filtro dos comunicados. Perfis (RBAC) já são aplicados no backend. */
+function visivelPara(e: Evento, tipoContrato?: PublicoAlvo, area?: string): boolean {
+  if (e.publico && e.publico !== "todos" && tipoContrato && e.publico !== tipoContrato) {
+    return false;
+  }
+  if (e.departamentos && e.departamentos.length > 0) {
+    const areaLower = (area ?? "").toLowerCase().trim();
+    if (!e.departamentos.some((d) => d.toLowerCase().trim() === areaLower)) return false;
+  }
+  return true;
+}
+
 // ISO -> valor de <input type="datetime-local"> ("YYYY-MM-DDTHH:mm", horário local).
 function toLocalInput(iso: string): string {
   const d = new Date(iso);
@@ -57,6 +81,9 @@ interface FormState {
   inicio: string;
   fim: string;
   imagem: string;
+  /** Segmentação por contrato e por departamentos (mesma dos comunicados). */
+  publico: PublicoAlvo;
+  departamentos: string[];
   /** Perfis de acesso que enxergam o evento (vazio = todos) — Fase 1 do RBAC. */
   perfis: string[];
 }
@@ -69,22 +96,35 @@ const VAZIO: FormState = {
   inicio: "",
   fim: "",
   imagem: "",
+  publico: "todos",
+  departamentos: [],
   perfis: [],
 };
 
 export default function EventosPage() {
   // Gestão pelo RBAC (recurso "eventos"), não pelo isAdmin binário — o backend revalida.
-  const { pode } = usePortal();
+  const { me, isAdmin, pode } = usePortal();
   const podeCriar = pode("eventos", "criar");
   const podeEditar = pode("eventos", "editar");
   const podeExcluir = pode("eventos", "excluir");
+  const gerencia = podeCriar || podeEditar || podeExcluir;
   const { data, loading, reload } = useAsync<Evento[]>(() => api.eventos.list());
+
+  // Departamentos existentes (Entra) para o seletor de segmentação — só quem gerencia carrega.
+  const { data: deptData } = useAsync(
+    () => (gerencia ? api.departamentos() : Promise.resolve([])),
+    [gerencia],
+  );
+  const deptOptions = deptData ?? [];
 
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(VAZIO);
   const [submitting, setSubmitting] = useState(false);
   const [processandoImg, setProcessandoImg] = useState(false);
+  // Resultado do "Enviar para agendas" por evento (id -> mensagem) e id em envio.
+  const [enviandoId, setEnviandoId] = useState<string | null>(null);
+  const [resultadoEnvio, setResultadoEnvio] = useState<Record<string, string>>({});
 
   // Comprime a foto escolhida e anexa (uma só; aparece no lugar da data).
   async function escolherImagem(files: FileList | null) {
@@ -115,6 +155,8 @@ export default function EventosPage() {
       inicio: toLocalInput(e.inicio),
       fim: e.fim ? toLocalInput(e.fim) : "",
       imagem: e.imagem ?? "",
+      publico: e.publico ?? "todos",
+      departamentos: e.departamentos ?? [],
       perfis: e.perfis ?? [],
     });
     setOpen(true);
@@ -132,6 +174,8 @@ export default function EventosPage() {
         inicio: new Date(form.inicio).toISOString(),
         fim: form.fim ? new Date(form.fim).toISOString() : undefined,
         imagem: form.imagem || undefined,
+        publico: form.publico,
+        departamentos: form.departamentos,
         perfis: form.perfis,
       };
       if (editId) await api.eventos.update(editId, payload);
@@ -148,7 +192,42 @@ export default function EventosPage() {
     await reload();
   }
 
-  const eventos = data ?? [];
+  // Admin/gestor: empurra o evento para a agenda do Outlook de todos os colaboradores do
+  // segmento (departamento/público). Mostra o resultado embaixo do botão.
+  async function enviarParaAgendas(e: Evento) {
+    setEnviandoId(e.id);
+    setResultadoEnvio((r) => ({ ...r, [e.id]: "" }));
+    try {
+      const r = await api.eventos.enviarAgenda(e.id);
+      let msg: string;
+      if (r.semDestinatarios) {
+        msg = "Nenhum colaborador no segmento selecionado.";
+      } else if (r.demo) {
+        msg = `Modo demo: convite simulado para ${r.total} colaborador(es).`;
+      } else if (r.falhas > 0 && r.enviados === 0) {
+        msg = r.erro
+          ? `Não foi possível enviar (${r.erro})`
+          : "Não foi possível enviar os convites (verifique a permissão Calendars.ReadWrite no Entra).";
+      } else {
+        const partes = [`${r.enviados} convite(s) enviado(s)`];
+        if (r.jaTinham) partes.push(`${r.jaTinham} já tinham`);
+        if (r.falhas) partes.push(`${r.falhas} falha(s)`);
+        msg = partes.join(" · ");
+      }
+      setResultadoEnvio((rr) => ({ ...rr, [e.id]: msg }));
+      await reload();
+    } catch {
+      setResultadoEnvio((rr) => ({ ...rr, [e.id]: "Erro ao enviar os convites." }));
+    } finally {
+      setEnviandoId(null);
+    }
+  }
+
+  // Não-gestor só vê o que é direcionado a ele (contrato E departamento); gestor vê tudo.
+  const todos = data ?? [];
+  const eventos = gerencia || isAdmin
+    ? todos
+    : todos.filter((e) => visivelPara(e, me?.tipoContrato, me?.area));
 
   return (
     <div>
@@ -204,6 +283,19 @@ export default function EventosPage() {
                         {meta.label}
                       </Badge>
                       <RestritoBadge perfis={e.perfis} className="ml-1.5" />
+                      {e.publico && e.publico !== "todos" && (
+                        <span className="ml-1.5 rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground">
+                          {PUBLICO_META[e.publico]}
+                        </span>
+                      )}
+                      {(e.departamentos ?? []).map((dep) => (
+                        <span
+                          key={dep}
+                          className="ml-1.5 rounded-full border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground"
+                        >
+                          {dep}
+                        </span>
+                      ))}
                       <h3 className="font-semibold text-foreground">
                         <Link to={`/eventos/${e.id}`} className="hover:text-primary hover:underline">
                           {e.titulo}
@@ -250,6 +342,35 @@ export default function EventosPage() {
                     {/* Fase 3: manda o evento para o calendário do Outlook de quem clicar. */}
                     <BotaoAgenda evento={e} className="ml-auto" />
                   </div>
+
+                  {/* Admin/gestor: envia o convite para a agenda de TODOS os colaboradores do
+                      segmento (departamento/público) selecionado no evento. Só p/ evento futuro. */}
+                  {podeEditar && new Date(e.inicio).getTime() >= Date.now() - 60 * 60_000 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => enviarParaAgendas(e)}
+                        disabled={enviandoId === e.id}
+                      >
+                        {enviandoId === e.id ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <CalendarPlus className="size-4" />
+                        )}
+                        Enviar para as agendas
+                      </Button>
+                      {resultadoEnvio[e.id] && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                          <CheckCircle2 className="size-3.5 text-success" />
+                          {resultadoEnvio[e.id]}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">
+                        Cria o compromisso no Outlook de todos os colaboradores selecionados.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -360,6 +481,90 @@ export default function EventosPage() {
             />
           </Field>
         </div>
+
+        {/* Segmentação: quem vê o evento E quem recebe o convite de agenda (contrato E depto). */}
+        <Field
+          label="Público-alvo"
+          htmlFor="ev-publico"
+          className="sm:max-w-xs"
+          hint="Quem enxerga o evento e recebe o convite de agenda."
+        >
+          <Droplist
+            id="ev-publico"
+            className="w-full"
+            value={form.publico}
+            onChange={(v) => setForm((f) => ({ ...f, publico: v }))}
+            options={PUBLICO_OPTIONS}
+          />
+        </Field>
+
+        <Field
+          label="Departamentos"
+          htmlFor="ev-departamentos"
+          hint={
+            deptOptions.length > 0
+              ? form.departamentos.length === 0
+                ? "Nenhum selecionado = todos os departamentos."
+                : `${form.departamentos.length} departamento(s) selecionado(s).`
+              : "Separe por vírgula. Vazio = todos."
+          }
+        >
+          {deptOptions.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex max-h-40 flex-wrap gap-1.5 overflow-auto rounded-lg border border-border bg-background p-2.5">
+                {deptOptions.map((dep) => {
+                  const sel = form.departamentos.includes(dep);
+                  return (
+                    <button
+                      type="button"
+                      key={dep}
+                      aria-pressed={sel}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          departamentos: sel
+                            ? f.departamentos.filter((x) => x !== dep)
+                            : [...f.departamentos, dep],
+                        }))
+                      }
+                      className={
+                        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors " +
+                        (sel
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-secondary text-secondary-foreground hover:border-primary/40")
+                      }
+                    >
+                      {dep}
+                    </button>
+                  );
+                })}
+              </div>
+              {form.departamentos.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground"
+                  onClick={() => setForm((f) => ({ ...f, departamentos: [] }))}
+                >
+                  Limpar seleção
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Input
+              id="ev-departamentos"
+              value={form.departamentos.join(", ")}
+              onChange={(ev) =>
+                setForm((f) => ({
+                  ...f,
+                  departamentos: ev.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                }))
+              }
+              placeholder="Ex.: Projetos, AMS, Comercial"
+            />
+          )}
+        </Field>
 
         {/* Evento restrito a perfis de acesso (vazio = visível a todos). */}
         <PerfisPicker

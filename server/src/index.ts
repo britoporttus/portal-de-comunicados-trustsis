@@ -448,6 +448,81 @@ app.post("/api/eventos/:id/agenda", requerPerm("eventos", "ver"), async (req, re
   res.json({ ok: true, demo: r.demo, evento: atualizado ?? evento });
 });
 
+// Destinatários de um evento = diretório da empresa filtrado pelo segmento do evento
+// (departamento E público-alvo). Sem Graph (preview), usa o diretório demo. Departamento
+// e contrato já vêm no diretório cacheado, então o filtro é local (nenhuma chamada por pessoa).
+function filtrarDestinatarios(base: import("./types.js").Pessoa[], evento: Evento) {
+  const deps = (evento.departamentos ?? []).map((d) => d.toLowerCase().trim()).filter(Boolean);
+  const pub = evento.publico && evento.publico !== "todos" ? evento.publico : null;
+  return base.filter((p) => {
+    if (deps.length) {
+      const area = (p.area ?? "").toLowerCase().trim();
+      if (!deps.includes(area)) return false;
+    }
+    // Só descarta por contrato quando o contrato da pessoa é conhecido E diverge do alvo.
+    if (pub && p.tipoContrato && p.tipoContrato !== pub) return false;
+    return true;
+  });
+}
+
+// ---------- "Enviar convite para a agenda dos participantes" (admin/gestor) ----------
+// Diferente de POST /agenda (o próprio usuário adiciona à SUA agenda), aqui QUEM PUBLICA o
+// evento empurra o compromisso para a agenda do Outlook de TODOS os colaboradores do segmento
+// (departamento/público). Exige permissão de EDITAR eventos + Calendars.ReadWrite (Application)
+// no Entra; sem Graph (preview) devolve `demo: true` e nada é escrito no calendário.
+app.post("/api/eventos/:id/enviar-agenda", requerPerm("eventos", "editar"), async (req, res) => {
+  const evento = (getStore().eventos ?? []).find((e) => e.id === req.params.id);
+  if (!evento) return res.status(404).json({ error: "não encontrado" });
+
+  // Diretório: cache diário (instantâneo) → ao vivo (1ª vez) → demo (sem Graph).
+  const diretorio = getCachedDiretorio() ?? (graphEnabled ? await fetchDiretorioLive() : mockPeople);
+  const alvo = filtrarDestinatarios(diretorio, evento);
+  if (!alvo.length) {
+    return res.json({ ok: true, enviados: 0, jaTinham: 0, falhas: 0, total: 0, semDestinatarios: true });
+  }
+
+  const jaEnviado = new Set((evento.naAgenda ?? []).map((x) => x.toLowerCase()));
+  const novasChaves: string[] = [];
+  let enviados = 0, jaTinham = 0, falhas = 0, demo = false, ultimoErro: string | undefined;
+  for (const p of alvo) {
+    const email = (p.email ?? "").toLowerCase();
+    if (!email) { falhas++; continue; }
+    const chave = (canonizar(email) || email).toLowerCase();
+    if (jaEnviado.has(chave)) { jaTinham++; continue; }
+    const r = await criarEventoNaAgenda(email, {
+      titulo: evento.titulo,
+      descricao: evento.descricao,
+      inicio: evento.inicio,
+      fim: evento.fim,
+      local: evento.local,
+    });
+    if (r.demo) demo = true;
+    if (r.ok) {
+      enviados++;
+      jaEnviado.add(chave);
+      novasChaves.push(chave);
+    } else {
+      falhas++;
+      ultimoErro = r.erro ?? ultimoErro;
+    }
+  }
+
+  if (novasChaves.length) {
+    mutate((s) => {
+      const e = s.eventos.find((x) => x.id === req.params.id);
+      if (e) e.naAgenda = [...(e.naAgenda ?? []), ...novasChaves];
+      return null;
+    });
+  }
+  auditar(
+    req,
+    "eventos.enviar-agenda",
+    evento.titulo,
+    `${enviados} enviado(s), ${jaTinham} já tinham, ${falhas} falha(s)`,
+  );
+  res.json({ ok: falhas === 0, enviados, jaTinham, falhas, total: alvo.length, demo, erro: ultimoErro });
+});
+
 // Aniversariantes: com Graph ligado, mescla os aniversários REAIS do Entra (campo birthday)
 // com os cadastrados manualmente pelo admin (store) — assim é sempre possível adicionar
 // alguém mesmo em modo Graph. Sem Graph (demo), usa só o store.
