@@ -30,11 +30,12 @@ function PersonPicker({
   const fecharRef = useRef<number | null>(null);
 
   const sugestoes = useMemo(() => {
+    // Só sugere depois de 2+ letras — não despeja o diretório inteiro ao abrir.
     const termo = value.trim().toLowerCase();
-    const base = termo
-      ? pessoas.filter((p) => p.nome.toLowerCase().includes(termo))
-      : pessoas;
-    return base.slice(0, 8);
+    if (termo.length < 2) return [];
+    return pessoas
+      .filter((p) => p.nome.toLowerCase().includes(termo))
+      .slice(0, 8);
   }, [value, pessoas]);
 
   return (
@@ -43,7 +44,7 @@ function PersonPicker({
         id="aniv-nome"
         value={value}
         autoComplete="off"
-        placeholder={pessoas.length ? "Digite para buscar no diretório…" : "Nome do aniversariante"}
+        placeholder={pessoas.length ? "Digite 2+ letras para buscar no diretório…" : "Nome do aniversariante"}
         onChange={(e) => {
           onText(e.target.value);
           setAberto(true);
@@ -280,13 +281,6 @@ export default function AniversariantesPage() {
             />
           </Field>
         </div>
-        <Field label="Foto" htmlFor="aniv-foto" hint="URL da foto (opcional)">
-          <Input
-            id="aniv-foto"
-            value={form.fotoUrl ?? ""}
-            onChange={(e) => setForm((f) => ({ ...f, fotoUrl: e.target.value }))}
-          />
-        </Field>
       </FormDialog>
     </div>
   );
