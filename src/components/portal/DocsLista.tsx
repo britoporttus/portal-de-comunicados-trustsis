@@ -80,7 +80,24 @@ export function DocsLista({ docs, badge, acoes, onAbrir }: DocsListaProps) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">{d.nome}</p>
+                      {onAbrir ? (
+                        <button
+                          type="button"
+                          onClick={() => onAbrir(d)}
+                          className="truncate text-left text-sm font-medium text-foreground hover:text-primary hover:underline focus-visible:text-primary focus-visible:underline focus-visible:outline-none"
+                        >
+                          {d.nome}
+                        </button>
+                      ) : (
+                        <a
+                          href={d.webUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate text-sm font-medium text-foreground hover:text-primary hover:underline"
+                        >
+                          {d.nome}
+                        </a>
+                      )}
                       {badge?.(d)}
                     </div>
                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
