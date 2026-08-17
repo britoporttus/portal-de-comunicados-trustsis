@@ -118,10 +118,9 @@ function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
 }
 
 // Exceção explícita: e-mails que devem SEMPRE aparecer no diretório, mesmo sem gestor
-// E sem cargo/área preenchidos no Entra. Caso do joao.brito@trustsis.com — sócio que não
-// tem manager nem cargo/área no Graph, então caía fora do filtro do CEO (e da regra de
-// "topo com cargo ou área"), aparecendo como e-mail cru e sem foto nas confirmações/ranking/mural.
-const SEMPRE_MANTER = new Set<string>(["joao.brito@trustsis.com"]);
+// e sem cargo/área preenchidos no Entra (fora da cadeia do CEO). Vazio no momento —
+// joao.brito@trustsis.com foi REMOVIDO a pedido do usuário (não deve aparecer no organograma).
+const SEMPRE_MANTER = new Set<string>([]);
 
 function emailDe(p: Pessoa): string {
   return (p.email ?? "").toLowerCase();
