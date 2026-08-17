@@ -10,6 +10,7 @@ import {
   dataLonga, diaSemana, faixaHorario, tempoRelativo, mesAtualNome, iniciais,
 } from "@/lib/format";
 import { atalhoVisivelPorDepto } from "@/lib/atalhos";
+import type { LinkUtil } from "@/lib/types";
 import { LinkIcon, CategoriaBadge } from "@/components/portal/shared";
 import { NextMeetingCard } from "@/components/portal/NextMeetingCard";
 import { AgendaSemanaDialog } from "@/components/portal/AgendaSemanaDialog";
@@ -60,7 +61,7 @@ function GrupoAtalhos({
   itens,
 }: {
   titulo: string;
-  itens: import("@/lib/types").LinkUtil[];
+  itens: LinkUtil[];
 }) {
   if (itens.length === 0) return null;
   return (
@@ -123,6 +124,35 @@ export default function HomePage() {
   }, [atalhos.data, links.data, me?.area]);
   const temAtalhos = institucionais.length > 0 || pessoais.length > 0;
 
+  // Agrupa os atalhos institucionais por DEPARTAMENTO: cada departamento vira uma seção
+  // "Links úteis <departamento>" (ex.: "Links úteis AMS", "Links úteis Projetos"). Os que
+  // valem para todos (sem departamento) ficam numa seção geral "Links úteis". Um atalho com
+  // vários departamentos aparece em cada seção correspondente.
+  const gruposInstitucionais = React.useMemo(() => {
+    const geral: LinkUtil[] = [];
+    const porDepto = new Map<string, LinkUtil[]>();
+    for (const a of institucionais) {
+      const deptos = (a.departamentos ?? []).map((d) => d.trim()).filter(Boolean);
+      if (deptos.length === 0) {
+        geral.push(a);
+        continue;
+      }
+      for (const d of deptos) {
+        const arr = porDepto.get(d);
+        if (arr) arr.push(a);
+        else porDepto.set(d, [a]);
+      }
+    }
+    const grupos: { titulo: string; itens: LinkUtil[] }[] = [];
+    if (geral.length) grupos.push({ titulo: "Links úteis", itens: geral });
+    for (const [depto, itens] of [...porDepto.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0], "pt-BR"),
+    )) {
+      grupos.push({ titulo: `Links úteis ${depto}`, itens });
+    }
+    return grupos;
+  }, [institucionais]);
+
   // Aniversariantes do MÊS corrente (a API devolve o ano inteiro ordenado por mês/dia;
   // o painel da home mostra só quem faz aniversário neste mês, ordenado por dia).
   const mesCorrente = new Date().getMonth() + 1;
@@ -147,7 +177,9 @@ export default function HomePage() {
             <LinhaVazia texto="Nenhum atalho cadastrado." />
           ) : (
             <div className="space-y-4">
-              <GrupoAtalhos titulo="Da empresa e da sua equipe" itens={institucionais} />
+              {gruposInstitucionais.map((g) => (
+                <GrupoAtalhos key={g.titulo} titulo={g.titulo} itens={g.itens} />
+              ))}
               <GrupoAtalhos titulo="Meus atalhos" itens={pessoais} />
             </div>
           )}
