@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, criarConviteEmMassa, previewDoDoc } from "./graph.js";
 import { mockPeople } from "./mock.js";
 import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeNoAcesso, podeVer,
@@ -484,12 +484,21 @@ app.post("/api/eventos/:id/enviar-agenda", requerPerm("eventos", "editar"), asyn
   const jaEnviado = new Set((evento.naAgenda ?? []).map((x) => x.toLowerCase()));
   const novasChaves: string[] = [];
   let enviados = 0, jaTinham = 0, falhas = 0, demo = false, ultimoErro: string | undefined;
+
+  // Só quem AINDA não recebeu o convite (idempotência): reenvio não duplica.
+  const destinatarios: { email: string; nome?: string; chave: string }[] = [];
   for (const p of alvo) {
     const email = (p.email ?? "").toLowerCase();
     if (!email) { falhas++; continue; }
     const chave = (canonizar(email) || email).toLowerCase();
     if (jaEnviado.has(chave)) { jaTinham++; continue; }
-    const r = await criarEventoNaAgenda(email, {
+    jaEnviado.add(chave);
+    destinatarios.push({ email, nome: p.nome, chave });
+  }
+
+  if (destinatarios.length) {
+    // UM convite de reunião com todos os novos como attendees → cada um aceita/recusa no Teams.
+    const r = await criarConviteEmMassa(upnDaRequisicao(req), destinatarios, {
       titulo: evento.titulo,
       descricao: evento.descricao,
       inicio: evento.inicio,
@@ -498,11 +507,10 @@ app.post("/api/eventos/:id/enviar-agenda", requerPerm("eventos", "editar"), asyn
     });
     if (r.demo) demo = true;
     if (r.ok) {
-      enviados++;
-      jaEnviado.add(chave);
-      novasChaves.push(chave);
+      enviados = destinatarios.length;
+      novasChaves.push(...destinatarios.map((d) => d.chave));
     } else {
-      falhas++;
+      falhas += destinatarios.length;
       ultimoErro = r.erro ?? ultimoErro;
     }
   }

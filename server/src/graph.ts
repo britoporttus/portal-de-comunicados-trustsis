@@ -427,6 +427,55 @@ export async function criarEventoNaAgenda(
   }
 }
 
+/** Fase 3 — envia um CONVITE de reunião para os colaboradores selecionados.
+ *  Cria UM evento na caixa do organizador (o gestor que disparou) com todos os
+ *  destinatários como `attendees` e `responseRequested`. O Graph despacha o convite:
+ *  cada pessoa recebe o compromisso na própria agenda e ACEITA/RECUSA no Teams/Outlook
+ *  — diferente de escrever direto (sem resposta). App-only exige `Calendars.ReadWrite`
+ *  (Application). Sem Graph (preview/demo) devolve `demo: true`. */
+export async function criarConviteEmMassa(
+  organizadorUpn: string,
+  destinatarios: { email: string; nome?: string }[],
+  ev: { titulo: string; descricao?: string; inicio: string; fim?: string; local?: string },
+): Promise<{ ok: boolean; demo?: boolean; id?: string; erro?: string }> {
+  const organizador = (organizadorUpn || config.entra.demoUserUpn || "").trim();
+  const alvos = destinatarios.filter((d) => d.email);
+  if (!graphEnabled || !organizador || !alvos.length) return { ok: true, demo: true };
+  const inicio = new Date(ev.inicio);
+  const fim = ev.fim ? new Date(ev.fim) : new Date(inicio.getTime() + 60 * 60_000);
+  try {
+    const criado = await graphPost<{ id?: string }>(
+      `/users/${encodeURIComponent(organizador)}/events`,
+      {
+        subject: ev.titulo,
+        body: { contentType: "text", content: ev.descricao || "Evento publicado no portal." },
+        start: { dateTime: inicio.toISOString().slice(0, 19), timeZone: "UTC" },
+        end: { dateTime: fim.toISOString().slice(0, 19), timeZone: "UTC" },
+        location: ev.local ? { displayName: ev.local } : undefined,
+        // Convite de verdade: cada colaborador é convidado e responde no Teams/Outlook.
+        attendees: alvos.map((d) => ({
+          emailAddress: { address: d.email, name: d.nome || undefined },
+          type: "required",
+        })),
+        responseRequested: true,
+        isReminderOn: true,
+        reminderMinutesBeforeStart: 60,
+      },
+    );
+    return { ok: true, id: criado?.id };
+  } catch (e) {
+    const msg = (e as Error).message;
+    const semPermissao = /\b403\b/.test(msg);
+    console.warn("[graph] criarConviteEmMassa falhou:", msg);
+    return {
+      ok: false,
+      erro: semPermissao
+        ? "O aplicativo não tem a permissão Calendars.ReadWrite (Application) concedida no Entra ID."
+        : msg,
+    };
+  }
+}
+
 /** Diretório COMPLETO da empresa (todos os usuários ATIVOS @trustsis.com ligados ao CEO,
  *  com foto). É a parte PESADA do organograma (listagem paginada + fotos) — por isso é
  *  extraída aqui para o scan diário (cache.ts) chamar 1x/dia, sem depender de um upn. */

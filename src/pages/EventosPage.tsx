@@ -15,7 +15,6 @@ import { diaSemana, faixaHorario } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { FormDialog, Field, ConfirmDelete, ToggleCard } from "@/components/portal/crud";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
-import { BotaoAgenda } from "@/components/portal/BotaoAgenda";
 import { usePortal } from "@/context/PortalProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -349,8 +348,6 @@ export default function EventosPage() {
                         {e.local}
                       </span>
                     )}
-                    {/* Fase 3: manda o evento para o calendário do Outlook de quem clicar. */}
-                    <BotaoAgenda evento={e} className="ml-auto" />
                   </div>
 
                   {/* Admin/gestor: envia o convite para a agenda de TODOS os colaboradores do
@@ -377,7 +374,7 @@ export default function EventosPage() {
                         </span>
                       )}
                       <span className="text-[11px] text-muted-foreground">
-                        Cria o compromisso no Outlook de todos os colaboradores selecionados.
+                        Envia o convite para a agenda de todos os colaboradores selecionados — cada um aceita ou recusa no Teams/Outlook.
                       </span>
                     </div>
                   )}
@@ -584,7 +581,7 @@ export default function EventosPage() {
           checked={form.enviarAgendaAoSalvar}
           onChange={(v) => setForm((f) => ({ ...f, enviarAgendaAoSalvar: v }))}
           label="Enviar para as agendas dos selecionados ao salvar"
-          hint="Cria o compromisso no Outlook de todos os colaboradores do público/departamentos selecionados. Você também pode enviar depois pelo botão no card do evento."
+          hint="Envia o convite para a agenda de todos os colaboradores do público/departamentos selecionados — cada um aceita ou recusa no Teams/Outlook. Você também pode enviar depois pelo botão no card do evento."
         />
 
         {/* Evento restrito a perfis de acesso (vazio = visível a todos). */}
