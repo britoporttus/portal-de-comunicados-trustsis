@@ -13,7 +13,7 @@ import { useAsync } from "@/lib/useAsync";
 import { comprimirImagem } from "@/lib/image";
 import { diaSemana, faixaHorario } from "@/lib/format";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
-import { FormDialog, Field, ConfirmDelete } from "@/components/portal/crud";
+import { FormDialog, Field, ConfirmDelete, ToggleCard } from "@/components/portal/crud";
 import { PerfisPicker, RestritoBadge } from "@/components/portal/PerfisPicker";
 import { BotaoAgenda } from "@/components/portal/BotaoAgenda";
 import { usePortal } from "@/context/PortalProvider";
@@ -86,6 +86,8 @@ interface FormState {
   departamentos: string[];
   /** Perfis de acesso que enxergam o evento (vazio = todos) — Fase 1 do RBAC. */
   perfis: string[];
+  /** Ao salvar, já dispara o convite para a agenda (Outlook) dos selecionados. */
+  enviarAgendaAoSalvar: boolean;
 }
 
 const VAZIO: FormState = {
@@ -99,6 +101,7 @@ const VAZIO: FormState = {
   publico: "todos",
   departamentos: [],
   perfis: [],
+  enviarAgendaAoSalvar: false,
 };
 
 export default function EventosPage() {
@@ -158,6 +161,7 @@ export default function EventosPage() {
       publico: e.publico ?? "todos",
       departamentos: e.departamentos ?? [],
       perfis: e.perfis ?? [],
+      enviarAgendaAoSalvar: false,
     });
     setOpen(true);
   }
@@ -178,10 +182,16 @@ export default function EventosPage() {
         departamentos: form.departamentos,
         perfis: form.perfis,
       };
-      if (editId) await api.eventos.update(editId, payload);
-      else await api.eventos.create(payload);
+      const salvo = editId
+        ? await api.eventos.update(editId, payload)
+        : await api.eventos.create(payload);
       await reload();
       setOpen(false);
+      // Opção do formulário: já empurra o convite para a agenda dos selecionados.
+      // O resultado aparece no card do evento na lista (mesmo fluxo do botão de lá).
+      if (form.enviarAgendaAoSalvar && salvo?.id) {
+        void enviarParaAgendas(salvo);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -570,6 +580,16 @@ export default function EventosPage() {
         <PerfisPicker
           valor={form.perfis}
           onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
+        />
+
+        {/* Atalho: já envia o convite para a agenda (Outlook) dos selecionados ao salvar —
+            mesma ação do botão "Enviar para as agendas" no card do evento. */}
+        <ToggleCard
+          icon={CalendarPlus}
+          checked={form.enviarAgendaAoSalvar}
+          onChange={(v) => setForm((f) => ({ ...f, enviarAgendaAoSalvar: v }))}
+          label="Enviar para as agendas ao salvar"
+          hint="Cria o compromisso no Outlook de todos os colaboradores do público/departamentos selecionados. Você também pode enviar depois pelo botão no card do evento."
         />
       </FormDialog>
     </div>
