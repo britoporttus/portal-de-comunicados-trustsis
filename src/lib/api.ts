@@ -6,7 +6,7 @@ import type {
   AtividadeDia, Ticket, TicketTipo, TicketPrioridade,
   Reporte, ReporteTipo, ReporteStatus, PoliticaDoc, Biblioteca,
   Perfil, GrupoEntra, CatalogoAcesso, IntegracaoConfig, Marca, Auditoria,
-  Relatorios, MeuDrive,
+  Relatorios,
 } from "./types";
 import { getAuthToken } from "./auth";
 
@@ -219,13 +219,6 @@ export const api = {
   // ---- Relatórios da administração: cobertura de leitura, engajamento e uso do portal ----
   relatorios: {
     get: (upn?: string) => req<Relatorios>(comUpn("/relatorios", upn)),
-  },
-
-  // ---- OneDrive pessoal ("Meus arquivos"): navegação read-only no drive do usuário ----
-  // Sem `pasta` = raiz. O backend usa a identidade da requisição: ninguém alcança outro drive.
-  meuDrive: {
-    list: (pasta?: string, upn?: string) =>
-      req<MeuDrive>(comUpn(`/meudrive${pasta ? `?pasta=${encodeURIComponent(pasta)}` : ""}`, upn)),
   },
 
   // ---- Atalhos da EMPRESA (institucionais/dashboards externos, segregados por perfil) ----

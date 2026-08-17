@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { config, graphEnabled } from "./config.js";
 import { getStore, mutate, newId } from "./store.js";
-import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc, listarMeuDrive } from "./graph.js";
+import { getProfile, getAgenda, getOrg, getVacations, getBirthdays, getDepartments, getPoliticas, listarDocsDoShare, isGraphOn, listGroups, fetchDiretorioLive, criarEventoNaAgenda, previewDoDoc } from "./graph.js";
 import { mockPeople } from "./mock.js";
 import {
   acessoDaReq, catalogo, filtrarPorPerfil, listarPerfis, normalizarPerfil, podeNoAcesso, podeVer,
@@ -715,19 +715,6 @@ app.delete("/api/bibliotecas/:id", requerPerm("bibliotecas", "excluir"), (req, r
   if (!ok) return res.status(404).json({ error: "não encontrada" });
   auditar(req, "bibliotecas.excluir", alvo?.nome ?? req.params.id);
   res.status(204).end();
-});
-
-// ---------- OneDrive pessoal: "Meus arquivos" ----------
-// Complementa as bibliotecas institucionais: aqui o colaborador navega no PRÓPRIO OneDrive
-// (read-only) e abre o arquivo no Office/Web. Só o próprio drive: o UPN é o que o backend
-// resolveu para a requisição (nunca um usuário escolhido pelo cliente) — pedir a pasta de
-// outra pessoa é impossível pela API. Exige `Files.Read.All` (Application) no Entra; sem o
-// consentimento, `erro` traz a instrução e a UI a exibe.
-app.get("/api/meudrive", requerPerm("onedrive", "ver"), async (req, res) => {
-  // Sem checagem de upn aqui de propósito: quem decide é listarMeuDrive, que sem Graph
-  // responde `demo: true` (preview) em vez de um erro de identidade que não ajuda ninguém.
-  const pastaId = typeof req.query.pasta === "string" ? req.query.pasta : undefined;
-  res.json(await listarMeuDrive(upnDaRequisicao(req), pastaId));
 });
 
 // ---------- Redes sociais (Fase 5: engajamento INTERNO — curtir/comentar no portal) ----------

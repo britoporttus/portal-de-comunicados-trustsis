@@ -40,9 +40,6 @@ export const RECURSOS: RecursoDef[] = [
   // Os arquivos continuam read-only (moram no SharePoint) — o portal só governa a exigência.
   { chave: "politicas", label: "Políticas internas", acoes: ["ver", "editar"] },
   { chave: "bibliotecas", label: "Bibliotecas de documentos", acoes: TODAS },
-  // OneDrive PESSOAL: cada um só alcança o próprio drive (o backend usa a identidade do
-  // token), então a única ação que faz sentido é "ver" — o portal nunca escreve nem apaga.
-  { chave: "onedrive", label: "Meus arquivos (OneDrive)", acoes: SO_VER },
   { chave: "atalhos", label: "Atalhos da empresa", acoes: TODAS },
   { chave: "tickets", label: "Tickets", acoes: ["ver", "criar"] },
   { chave: "feedback", label: "Feedback entre colegas", acoes: ["ver", "criar", "excluir"] },
@@ -72,7 +69,6 @@ export const PAGINAS: PaginaDef[] = [
   { rota: "/links", label: "Links úteis", recurso: "links" },
   { rota: "/politicas", label: "Políticas internas", recurso: "politicas" },
   { rota: "/documentos", label: "Documentos", recurso: "bibliotecas" },
-  { rota: "/meus-arquivos", label: "Meus arquivos", recurso: "onedrive" },
   { rota: "/social", label: "Redes sociais", recurso: "social" },
   { rota: "/tickets", label: "Tickets", recurso: "tickets" },
   { rota: "/ranking", label: "Ranking", recurso: "ranking" },
@@ -128,8 +124,6 @@ function perfisIniciais(): Perfil[] {
       // Bibliotecas e atalhos da empresa são PUBLICADOS pelo admin: o colaborador só lê.
       bibliotecas: ["ver"],
       atalhos: ["ver"],
-      // OneDrive pessoal: cada um enxerga apenas o próprio drive (identidade do backend).
-      onedrive: ["ver"],
       tickets: ["ver", "criar"],
       feedback: ["ver", "criar"],
       reportes: ["ver", "criar"],
@@ -176,16 +170,12 @@ const MIGRACOES: { id: string; aplicar: (p: Perfil) => void }[] = [
     },
   },
   {
-    // OneDrive pessoal ("Meus arquivos"): recurso e página novos. Todo mundo vê o PRÓPRIO
-    // drive — não há como um perfil dar acesso ao drive de outra pessoa (o backend usa a
-    // identidade da requisição), então o default é liberar a página para os dois perfis.
-    id: "fase5-onedrive-pessoal",
+    // "Meus arquivos" (OneDrive pessoal) foi REMOVIDO do portal: limpa o recurso e a página
+    // que a migração fase5-onedrive-pessoal havia adicionado aos perfis persistidos.
+    id: "remover-onedrive-pessoal",
     aplicar: (p) => {
-      if (!p.sistema) return;
-      p.permissoes ??= {};
-      p.permissoes.onedrive ??= ["ver"];
-      p.paginas ??= [];
-      if (!p.paginas.includes("/meus-arquivos")) p.paginas.push("/meus-arquivos");
+      if (p.permissoes) delete (p.permissoes as Record<string, Acao[]>).onedrive;
+      if (p.paginas) p.paginas = p.paginas.filter((rota) => rota !== "/meus-arquivos");
     },
   },
 ];
