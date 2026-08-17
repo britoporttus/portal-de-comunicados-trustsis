@@ -244,6 +244,9 @@ export const api = {
     // Documentos de UMA biblioteca (lidos do Graph, cache curto no servidor).
     docs: (id: string, forcar = false) =>
       req<PoliticaDoc[]>(`/bibliotecas/${id}/docs${forcar ? "?forcar=true" : ""}`),
+    // Link embutível de UM documento para pré-visualizar no pop-up (fallback: SharePoint).
+    preview: (id: string, docId: string) =>
+      req<{ url: string | null }>(`/bibliotecas/${id}/docs/${docId}/preview`),
     // upn vai junto para a AUDITORIA (Fase 6) atribuir a ação a quem a fez.
     create: (b: Partial<Biblioteca>, upn?: string) =>
       req<Biblioteca>(comUpn("/bibliotecas", upn), { method: "POST", body: JSON.stringify(b) }),

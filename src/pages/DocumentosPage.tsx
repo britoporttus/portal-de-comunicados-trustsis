@@ -11,8 +11,10 @@ import type { Biblioteca } from "@/lib/types";
 import { useAsync } from "@/lib/useAsync";
 import { cn } from "@/lib/utils";
 import { usePortal } from "@/context/PortalProvider";
+import type { PoliticaDoc } from "@/lib/types";
 import { PageHeader, EmptyState, ListSkeleton } from "@/components/portal/page-kit";
 import { DocsLista } from "@/components/portal/DocsLista";
+import { DocPreviewDialog } from "@/components/portal/DocPreviewDialog";
 import { RestritoBadge } from "@/components/portal/PerfisPicker";
 import { BibliotecaIcone } from "@/components/portal/shared";
 import { Button } from "@/components/ui/button";
@@ -107,6 +109,8 @@ function DocsDaBiblioteca({ biblioteca }: { biblioteca: Biblioteca }) {
     [biblioteca.id],
   );
   const docs = data ?? [];
+  // Documento aberto no pop-up de pré-visualização (feedback: preferível ao SharePoint).
+  const [preview, setPreview] = useState<PoliticaDoc | null>(null);
 
   const atualizar = async () => {
     setForcando(true);
@@ -151,8 +155,14 @@ function DocsDaBiblioteca({ biblioteca }: { biblioteca: Biblioteca }) {
           description="Nenhum arquivo encontrado nesta pasta. Verifique se o link de compartilhamento aponta para a pasta certa e se o app tem permissão Sites.Read.All."
         />
       ) : (
-        <DocsLista docs={docs} />
+        <DocsLista docs={docs} onAbrir={(d) => setPreview(d)} />
       )}
+
+      <DocPreviewDialog
+        doc={preview}
+        onOpenChange={(v) => !v && setPreview(null)}
+        carregarUrl={(d) => api.bibliotecas.preview(biblioteca.id, d.id).then((r) => r.url)}
+      />
     </section>
   );
 }

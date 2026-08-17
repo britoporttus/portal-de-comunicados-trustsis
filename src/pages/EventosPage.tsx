@@ -576,20 +576,21 @@ export default function EventosPage() {
           )}
         </Field>
 
-        {/* Evento restrito a perfis de acesso (vazio = visível a todos). */}
-        <PerfisPicker
-          valor={form.perfis}
-          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
-        />
-
-        {/* Atalho: já envia o convite para a agenda (Outlook) dos selecionados ao salvar —
-            mesma ação do botão "Enviar para as agendas" no card do evento. */}
+        {/* Envio para as agendas: fica logo abaixo da segmentação (público/departamentos), que é
+            justamente o alvo do convite — é onde o gestor espera achar este botão. Ao salvar, já
+            dispara o convite; também dá para enviar depois pelo botão no card do evento. */}
         <ToggleCard
           icon={CalendarPlus}
           checked={form.enviarAgendaAoSalvar}
           onChange={(v) => setForm((f) => ({ ...f, enviarAgendaAoSalvar: v }))}
-          label="Enviar para as agendas ao salvar"
+          label="Enviar para as agendas dos selecionados ao salvar"
           hint="Cria o compromisso no Outlook de todos os colaboradores do público/departamentos selecionados. Você também pode enviar depois pelo botão no card do evento."
+        />
+
+        {/* Evento restrito a perfis de acesso (vazio = visível a todos). */}
+        <PerfisPicker
+          valor={form.perfis}
+          onChange={(perfis) => setForm((f) => ({ ...f, perfis }))}
         />
       </FormDialog>
     </div>

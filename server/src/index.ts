@@ -653,6 +653,18 @@ app.get("/api/bibliotecas/:id/docs", requerPerm("bibliotecas", "ver"), async (re
   }
 });
 
+/** Link EMBUTÍVEL de um documento da biblioteca (para PRÉ-VISUALIZAR dentro do portal, num
+ *  pop-up, em vez de abrir o SharePoint em outra aba). Sem Graph/preview disponível devolve
+ *  `url: null` e a UI cai no link do SharePoint. Mesmo motor das políticas (previewDoDoc). */
+app.get("/api/bibliotecas/:id/docs/:docId/preview", requerPerm("bibliotecas", "ver"), async (req, res) => {
+  const b = (getStore().bibliotecas ?? []).find((x) => x.id === req.params.id);
+  if (!b || !bibliotecaVisivel(b, await acessoDaReq(req))) {
+    return res.status(404).json({ error: "não encontrada" });
+  }
+  const url = await previewDoDoc(b.shareUrl, req.params.docId);
+  res.json({ url });
+});
+
 /** Normaliza o corpo vindo da UI (defensivo — nada de campo solto virando registro). */
 function normalizarBiblioteca(body: any, base?: Biblioteca): Biblioteca {
   const perfis = Array.isArray(body?.perfis)
