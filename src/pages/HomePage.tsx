@@ -247,7 +247,7 @@ export default function HomePage() {
                   <Link
                     key={e.id}
                     to={`/eventos/${e.id}`}
-                    className="flex gap-3 rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-secondary/60"
+                    className="flex gap-3 rounded-lg border border-border p-3 transition duration-200 ease-out hover:border-primary/40 hover:bg-secondary/60 motion-safe:hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
                   >
                     {e.imagem ? (
                       <img

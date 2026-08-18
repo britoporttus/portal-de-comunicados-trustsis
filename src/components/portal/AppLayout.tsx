@@ -97,7 +97,8 @@ export default function AppLayout() {
   const { me, theme, toggleTheme, verComoUsuario, setVerComoUsuario, mode, background } = usePortal();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem("ts-sidebar") === "1");
-  const isHome = useLocation().pathname === "/";
+  const pathname = useLocation().pathname;
+  const isHome = pathname === "/";
   const bg = getBackground(background);
 
   useEffect(() => {
@@ -222,7 +223,17 @@ export default function AppLayout() {
               </div>
             )}
             {isHome && <WelcomeHero />}
-            <Outlet />
+            {/* Entrada de conteúdo por rota — camada de movimento (anti-slop): fade + pequeno rise,
+                ease-out, <300ms, só transform/opacity. Keyada no pathname para reanimar a cada
+                navegação. `motion-safe:` respeita prefers-reduced-motion (sem animação = conteúdo
+                já visível). Navegação é frequente, mas o teto de 300ms e o deslocamento mínimo
+                mantêm a sensação utilitária, não espetáculo. */}
+            <div
+              key={pathname}
+              className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 ease-out"
+            >
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
