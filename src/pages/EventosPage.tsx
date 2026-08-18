@@ -242,6 +242,7 @@ export default function EventosPage() {
     <div>
       <PageHeader
         icon={CalendarDays}
+        eyebrow="Agenda"
         title="Eventos"
         description="Agenda de eventos e confraternizações da empresa"
         action={

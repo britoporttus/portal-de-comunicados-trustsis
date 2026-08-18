@@ -35,6 +35,7 @@ export default function DocumentosPage() {
     <div>
       <PageHeader
         icon={FolderOpen}
+        eyebrow="Conhecimento"
         title="Documentos"
         description="Bibliotecas compartilhadas no SharePoint — modelos, materiais e documentos oficiais"
       />

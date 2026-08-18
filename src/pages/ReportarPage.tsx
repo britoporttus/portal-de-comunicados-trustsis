@@ -151,6 +151,7 @@ export default function ReportarPage() {
     <div>
       <PageHeader
         icon={MessageSquareWarning}
+        eyebrow="Melhoria contínua"
         title="Feedback do portal"
         description={
           isAdmin

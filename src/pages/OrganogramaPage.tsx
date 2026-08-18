@@ -79,6 +79,7 @@ export default function OrganogramaPage() {
     <div>
       <PageHeader
         icon={Network}
+        eyebrow="Pessoas"
         title="Organograma"
         description="Colaboradores ativos da TrustSis, organizados por departamento"
         action={<ScanStatus onRefreshed={reload} />}

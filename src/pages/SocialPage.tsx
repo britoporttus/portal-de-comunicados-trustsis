@@ -95,6 +95,7 @@ export default function SocialPage() {
     <div>
       <PageHeader
         icon={Share2}
+        eyebrow="Comunidade"
         title="Redes sociais"
         description="Últimas publicações da TrustSis"
         action={

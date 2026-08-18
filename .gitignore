@@ -40,3 +40,5 @@ server/data/
 .env.bak
 .env.hivebak
 .hive-logo-crop.png
+.skillui-out/
+.hive-shot.png

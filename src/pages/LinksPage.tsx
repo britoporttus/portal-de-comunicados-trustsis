@@ -90,6 +90,7 @@ export default function LinksPage() {
     <div>
       <PageHeader
         icon={LayoutGrid}
+        eyebrow="Acesso rápido"
         title="Links úteis"
         description="Atalhos da empresa e os seus atalhos pessoais, num só lugar"
         action={

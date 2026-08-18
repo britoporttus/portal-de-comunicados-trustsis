@@ -140,6 +140,7 @@ export default function TicketsPage() {
     <div className="space-y-6">
       <PageHeader
         icon={TicketIcon}
+        eyebrow="Suporte"
         title="Tickets"
         description="Abra e acompanhe seus chamados de suporte."
         action={

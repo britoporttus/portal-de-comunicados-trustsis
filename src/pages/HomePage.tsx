@@ -54,7 +54,8 @@ function LinhaVazia({ texto }: { texto: string }) {
   return <p className="py-6 text-center text-sm text-muted-foreground">{texto}</p>;
 }
 
-/** Um grupo de chips do "Acesso rápido" (empresa/equipe ou pessoais).
+/** Um grupo de atalhos do "Acesso rápido" (empresa/equipe ou pessoais), como tiles
+ *  de ícone circular (padrão de intranet: atalho reconhecível pelo ícone, não só texto).
  *  Não renderiza nada quando o grupo está vazio. */
 function GrupoAtalhos({
   titulo,
@@ -66,20 +67,23 @@ function GrupoAtalhos({
   if (itens.length === 0) return null;
   return (
     <div>
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="mb-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {titulo}
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
         {itens.slice(0, 16).map((l) => (
           <a
             key={l.id}
             href={l.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-secondary"
+            title={l.label}
+            className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-card px-2 py-3 text-center transition duration-200 ease-out hover:border-primary/40 hover:bg-secondary/50 motion-safe:hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
           >
-            <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
-            <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>
+            <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+              <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-5 shrink-0" />
+            </span>
+            <span className="line-clamp-2 text-xs font-medium leading-tight text-foreground">{l.label}</span>
           </a>
         ))}
       </div>
@@ -168,9 +172,9 @@ export default function HomePage() {
         <section>
           <h2 className="mb-3 text-sm font-semibold text-foreground">Acesso rápido</h2>
           {links.loading || atalhos.loading ? (
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-28 rounded-lg" />
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Skeleton key={i} className="h-[86px] rounded-xl" />
               ))}
             </div>
           ) : !temAtalhos ? (

@@ -69,6 +69,7 @@ export default function RankingPage() {
     <div className="space-y-6">
       <PageHeader
         icon={Trophy}
+        eyebrow="Engajamento"
         title="Ranking"
         description="Pontue interagindo com o portal. Quem lidera no fim do mês leva o prêmio."
         action={

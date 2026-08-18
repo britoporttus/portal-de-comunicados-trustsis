@@ -46,6 +46,7 @@ export default function PoliticasPage() {
     <div>
       <PageHeader
         icon={ScrollText}
+        eyebrow="Governança"
         title="Políticas internas"
         description="Documentos oficiais compartilhados no SharePoint — leitura para todos os colaboradores"
       />

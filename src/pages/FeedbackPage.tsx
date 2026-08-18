@@ -219,6 +219,7 @@ export default function FeedbackPage() {
     <div className="space-y-6">
       <PageHeader
         icon={MessageSquareHeart}
+        eyebrow="Reconhecimento"
         title="Feedback"
         description="Reconheça um colega. Cada feedback recebido rende pontos no ranking."
       />

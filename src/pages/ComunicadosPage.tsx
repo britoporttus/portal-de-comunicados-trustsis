@@ -368,6 +368,7 @@ export default function ComunicadosPage() {
     <div>
       <PageHeader
         icon={Megaphone}
+        eyebrow="Comunicação"
         title="Comunicados"
         description="Avisos e informativos internos"
         action={

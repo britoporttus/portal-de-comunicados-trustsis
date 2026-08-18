@@ -164,6 +164,7 @@ export default function AniversariantesPage() {
     <div>
       <PageHeader
         icon={Cake}
+        eyebrow="Pessoas"
         title="Aniversariantes"
         description={`Celebre com quem faz aniversário em ${MESES[mesFiltro - 1]}`}
         action={

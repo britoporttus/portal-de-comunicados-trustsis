@@ -15,6 +15,7 @@ export default function FeriasPage() {
     <div>
       <PageHeader
         icon={Plane}
+        eyebrow="Pessoas"
         title="Quem está de férias"
         description="Colaboradores ausentes ou de férias no momento"
         action={<ScanStatus onRefreshed={reload} />}

@@ -57,6 +57,7 @@ export default function AdminPage() {
     <div className="space-y-6">
       <PageHeader
         icon={ShieldCheck}
+        eyebrow="Gestão"
         title="Administração"
         description="Perfis de acesso, integração com o Entra ID, auditoria e diagnóstico — tudo em um só lugar."
       />
