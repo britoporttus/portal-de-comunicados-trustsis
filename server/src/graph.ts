@@ -118,9 +118,15 @@ function tipoContratoDe(employeeType?: string): "clt" | "pj" | undefined {
 }
 
 // Exceção explícita: e-mails que devem SEMPRE aparecer no diretório, mesmo sem gestor
-// e sem cargo/área preenchidos no Entra (fora da cadeia do CEO). Vazio no momento —
-// joao.brito@trustsis.com foi REMOVIDO a pedido do usuário (não deve aparecer no organograma).
-const SEMPRE_MANTER = new Set<string>([]);
+// E sem cargo/área preenchidos no Entra. Caso do joao.brito@trustsis.com — sócio que não
+// tem manager nem cargo/área no Graph, então caía fora do filtro do CEO. Mantê-lo aqui faz
+// ele aparecer normalmente em confirmações/ranking/mural/aniversariantes/destinatários.
+const SEMPRE_MANTER = new Set<string>(["joao.brito@trustsis.com"]);
+
+// Exceção ao contrário: e-mails que continuam no diretório (acima) mas NÃO devem aparecer
+// no ORGANOGRAMA (árvore + lista). Pedido do usuário: joao.brito some SÓ do organograma,
+// permanecendo em todo o resto. Filtrado apenas no retorno de `getOrg` (endpoint /api/org).
+const OCULTAR_NO_ORGANOGRAMA = new Set<string>(["joao.brito@trustsis.com"]);
 
 function emailDe(p: Pessoa): string {
   return (p.email ?? "").toLowerCase();
@@ -523,13 +529,17 @@ export async function getOrg(
   // então isto elimina o delay de vários segundos que vinha das ~4 chamadas por request
   // (perfil + foto + manager + directReports) que rodavam a cada abertura da tela.
   if (opts?.diretorio && opts.diretorio.length) {
-    const dir = opts.diretorio;
+    const full = opts.diretorio;
+    // Diretório servido AO organograma esconde quem está em OCULTAR_NO_ORGANOGRAMA
+    // (permanecem no snapshot compartilhado, só somem desta tela). `self`/`gestor` derivam
+    // do `full` para não quebrar caso o próprio ocultado abra a página.
+    const dir = full.filter((p) => !OCULTAR_NO_ORGANOGRAMA.has(emailDe(p)));
     const alvo = target.toLowerCase();
     const self =
-      dir.find((p) => p.id.toLowerCase() === alvo) ??
-      dir.find((p) => (p.email ?? "").toLowerCase() === alvo);
+      full.find((p) => p.id.toLowerCase() === alvo) ??
+      full.find((p) => (p.email ?? "").toLowerCase() === alvo);
     if (self) {
-      const gestor = self.managerId ? dir.find((p) => p.id === self.managerId) : undefined;
+      const gestor = self.managerId ? full.find((p) => p.id === self.managerId) : undefined;
       const liderados = dir.filter((p) => p.managerId === self.id);
       return { ...self, gestor, liderados, diretorio: dir };
     }
@@ -562,7 +572,10 @@ export async function getOrg(
     } catch { /* sem liderados */ }
 
     // Diretório do cache diário (instantâneo) ou ao vivo (1ª vez / cache vazio).
-    const diretorio = opts?.diretorio ?? (await fetchDiretorioLive());
+    // Esconde do organograma quem está em OCULTAR_NO_ORGANOGRAMA (segue no snapshot geral).
+    const diretorio = (opts?.diretorio ?? (await fetchDiretorioLive())).filter(
+      (p) => !OCULTAR_NO_ORGANOGRAMA.has(emailDe(p)),
+    );
 
     return { ...self, gestor, liderados, diretorio };
   } catch (e) {
