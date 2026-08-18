@@ -29,7 +29,7 @@ function Painel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card shadow-sm">
+    <section className="rounded-2xl border border-border bg-card">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Icon className="size-4 text-primary" />
@@ -76,7 +76,7 @@ function GrupoAtalhos({
             href={l.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card/80 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/40 hover:bg-secondary"
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-secondary"
           >
             <LinkIcon url={l.url} icon={l.icon} label={l.label} className="size-4 shrink-0" />
             <span className="line-clamp-1 text-xs font-medium text-foreground">{l.label}</span>

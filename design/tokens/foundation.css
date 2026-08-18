@@ -11,19 +11,21 @@
  * ────────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── NEUTROS (ink) — porcelana → cinza-sombra → quase-preto ───────────────── */
+  /* ── NEUTROS (ink) — cinza NEUTRO da marca TrustSis (branco → grafite) ───────
+     Escala true-gray ancorada nos dois cinzas oficiais: #BEBEBE (300) e #7F7F7F (500).
+     Sem tinta quente/verde — cinza puro corporativo que combina com o console navy. */
   --ink-0:   #ffffff;
-  --ink-50:  #fafdf6;  /* porcelana (paper) */
-  --ink-100: #f2f4ec;
-  --ink-200: #e6e8e0;
-  --ink-300: #d2d5cb;
-  --ink-400: #a8aba2;
-  --ink-500: #7a7c74;
-  --ink-600: #565a52;
-  --ink-700: #3e4039;
-  --ink-800: #2d2a32;  /* shadow gray (ink base) */
-  --ink-900: #1a1a1c;
-  --ink-950: #111014;
+  --ink-50:  #f7f8f8;
+  --ink-100: #eeefef;
+  --ink-200: #e0e1e1;
+  --ink-300: #bebebe;  /* cinza claro da marca (#BEBEBE) */
+  --ink-400: #9b9c9c;
+  --ink-500: #7f7f7f;  /* cinza médio da marca (#7F7F7F) */
+  --ink-600: #616262;
+  --ink-700: #464747;
+  --ink-800: #2e2f2f;
+  --ink-900: #1a1b1b;
+  --ink-950: #121313;
 
   /* ── PRIMÁRIA (ciano TrustSis #00ABD6) — escala 50–900 ───────────────────── */
   --primary-50:  #ecfbff;
@@ -39,6 +41,12 @@
   --primary-soft:  var(--primary-100);
   --primary-hover: var(--primary-600);
   --primary-active:var(--primary-700);
+
+  /* ── NAVY DA MARCA (#0B1A4E) — superfície de banner fixa (hero), independe do tema ──
+     A identidade "console navy" pede um banner escuro sóbrio mesmo no modo claro.
+     Estável; não é um token semântico de tema. */
+  --brand-navy:   #0b1a4e;
+  --brand-navy-2: #12296b;
 
   /* Primárias SELECIONÁVEIS (estilo brand kit — todas claras pra texto-ink legível). Troque --primary-500
      e a UI re-tematiza. (v1: as opções; o picker de tema vem numa fase seguinte.) */

@@ -10,13 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePortal } from "@/context/PortalProvider";
-import { iniciais, saudacao } from "@/lib/format";
+import { iniciais } from "@/lib/format";
 import { getBackground } from "@/lib/backgrounds";
 import { NAV } from "./nav";
 import { Brand } from "./shared";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ThemePicker } from "./ThemePicker";
 import { PontosBadge } from "./PontosBadge";
+import { WelcomeHero } from "./WelcomeHero";
 
 const MYACCOUNT_URL = "https://myaccount.microsoft.com/";
 
@@ -220,26 +221,11 @@ export default function AppLayout() {
                 a identidade definida em Administração › Integração.
               </div>
             )}
-            {isHome && <PageGreeting />}
+            {isHome && <WelcomeHero />}
             <Outlet />
           </div>
         </main>
       </div>
-    </div>
-  );
-}
-
-function PageGreeting() {
-  const { me } = usePortal();
-  const primeiro = me?.nome?.split(" ")[0] ?? "colaborador";
-  return (
-    <div className="mb-4">
-      <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-[28px]">
-        {saudacao()}, {primeiro} 👋
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Tudo o que você precisa da TrustSis, em um só lugar.
-      </p>
     </div>
   );
 }
